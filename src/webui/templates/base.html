@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}西煲{% endblock %}</title>
+<link rel="icon" href="{{ url_for('static', filename='xibao_logo.png') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=38">
+</head>
+<body class="app">
+<main class="main">
+  {% block content %}{% endblock %}
+</main>
+<script>
+function openSettings() {
+  if (window.openSettingsModal) openSettingsModal();
+}
+function modalShow(el) {
+  if (!el) return;
+  el.classList.remove('anim-out');
+  el.classList.remove('hidden');
+  void el.offsetWidth;
+  el.classList.add('anim-in');
+}
+function modalHide(el, done) {
+  if (!el) return;
+  if (el.classList.contains('hidden')) { if (done) done(); return; }
+  el.classList.remove('anim-in');
+  void el.offsetWidth;
+  el.classList.add('anim-out');
+  setTimeout(function () {
+    el.classList.add('hidden');
+    el.classList.remove('anim-out');
+    if (done) done();
+  }, 140);
+}
+</script>
+</body>
+</html>

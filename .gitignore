@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+
+# 虚拟环境
+.venv/
+venv/
+
+# 打包产物
+dist/
+build/
+
+# Inno Setup 便携编译器（本地工具，不进仓库）
+inno/
+
+# 本地运行数据/日志
+work/
+*.log
+
+# 编辑器/系统
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store

@@ -1,0 +1,384 @@
+﻿{% extends "base.html" %}
+{% block title %}资源管理器 - 西煲{% endblock %}
+{% block content %}
+<div class="explorer">
+  <!-- 顶部：地址栏 + 导航 + 搜索 -->
+  <div class="explorer-topbar">
+    <button class="nav-btn" onclick="navBack()" title="后退">←</button>
+    <button class="nav-btn" onclick="navForward()" title="前进">→</button>
+    <button class="nav-btn" onclick="navUp()" title="上一级">↑</button>
+    <button class="nav-btn" onclick="openInSystemExplorer()" title="在系统资源管理器中打开当前目录">🪟</button>
+    <div class="address-bar" id="address-bar" onclick="editAddress()" title="点击输入路径">
+      <span id="address-text">此电脑</span>
+    </div>
+    <div class="topbar-search">
+      <input type="search" id="search-input" placeholder="搜索全部文件…" class="search-box">
+    </div>
+  </div>
+
+  <div class="explorer-tools">
+    <button id="btn-view-list" onclick="setView('list')" class="mini" title="列表视图">☰</button>
+    <button id="btn-view-grid" onclick="setView('grid')" class="mini active" title="网格视图">▦</button>
+    <span class="grid-slider" id="grid-slider-wrap" title="网格图标大小">
+      <div class="scale-seg" id="scale-seg">
+        <button data-v="0" title="50%">50</button>
+        <button data-v="1" title="75%">75</button>
+        <button data-v="2" class="active" title="100%">100</button>
+        <button data-v="3" title="125%">125</button>
+        <button data-v="4" title="150%">150</button>
+      </div>
+    </span>
+    <span class="exp-spacer" style="flex:1"></span>
+    <span class="sort-wrap">
+      <span class="sort-label">排序：</span>
+      <div class="sort-menu" id="sort-menu">
+        <button class="sort-toggle mini" onclick="toggleSortMenu()" id="sort-toggle-btn">名称 ▾</button>
+        <div class="sort-panel" id="sort-panel" hidden>
+          <ul class="sort-fields">
+            <li data-field="name" onclick="setSortField('name')">名称</li>
+            <li data-field="mtime" onclick="setSortField('mtime')">修改日期</li>
+            <li data-field="type" onclick="setSortField('type')">类型</li>
+          </ul>
+          <hr class="sort-divider">
+          <ul class="sort-dir">
+            <li data-dir="asc" onclick="setSortDir('asc')">递增</li>
+            <li data-dir="desc" onclick="setSortDir('desc')">递减</li>
+          </ul>
+        </div>
+      </div>
+    </span>
+    <button class="mini" onclick="openSettingsModal()" title="设置">⚙️</button>
+  </div>
+
+  <!-- 通栏筛选胶囊条（设置可切换显示位置） -->
+  <div id="tag-filter-chips-top" class="tag-filter-chips top-bar hidden"></div>
+
+  <div class="exp-left-main">
+    <!-- Win11 文件树（左） -->
+    <aside class="filetree-panel" id="filetree-panel">
+      <div class="tag-panel-head">📂 此电脑</div>
+      <div id="quick-access" class="quick-access">
+        <div class="quick-head">⭐ 快速访问</div>
+        <div id="quick-list" class="quick-list"></div>
+      </div>
+      <div class="tag-panel-head">🗂 目录</div>
+      <div id="file-tree" class="file-tree"></div>
+    </aside>
+
+    <!-- 主体 -->
+    <div class="explorer-body" id="explorer-body">
+      <div id="item-grid"></div>
+    </div>
+
+    <!-- 标签树（右，可浮动） -->
+    <aside class="tag-panel" id="tag-panel">
+      <div class="tag-bookmark-bar" id="tag-bookmark-bar">
+        <button class="bookmark-pill" id="btn-filter-mode" onclick="toggleFilterMode()" title="新版筛选：点击标签多选筛选">🔖</button>
+        <button class="bookmark-pill mode-btn" id="btn-mode-else" onclick="setFilterMode('else')" title="同时满足所有选中标签（交集）" style="display:none">➖</button>
+        <button class="bookmark-pill mode-btn" id="btn-mode-and" onclick="setFilterMode('and')" title="命中任一选中标签（并集）" style="display:none">➕</button>
+        <button class="bookmark-pill" id="btn-schemes" onclick="toggleSchemesDrawer()" title="筛选方案" style="display:none">📚</button>
+      </div>
+      <div class="tag-panel-inner">
+        <div class="tag-panel-head">
+          <span>🏷 标签</span>
+          <span class="tag-head-actions">
+            <button class="mini" onclick="toggleAllTags()" id="btn-toggle-all-tags" title="展开/折叠全部">展开/折叠</button>
+            <button class="mini" onclick="addRootTag()" title="新建根标签">+</button>
+          </span>
+        </div>
+        <div id="tag-filter-chips" class="tag-filter-chips hidden"></div>
+        <div id="tag-tree" class="tag-tree"></div>
+        <div class="tag-panel-foot">
+          <span class="muted" style="font-size:11px">标签管理见设置</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- 筛选方案小浮窗（可拖动，可关闭） -->
+    <div class="schemes-float hidden" id="schemes-float">
+      <div class="schemes-float-head" id="schemes-float-head">
+        <span>筛选方案</span>
+        <span>
+          <button class="mini" onclick="saveCurrentScheme()" title="保存当前筛选">+</button>
+          <button class="modal-x" onclick="closeSchemesFloat()" title="关闭">×</button>
+        </span>
+      </div>
+      <div id="schemes-list" class="schemes-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 右键菜单 -->
+<div id="ctx-menu" class="ctx-menu hidden"></div>
+<div id="tag-ctx-menu" class="ctx-menu hidden"></div>
+
+<!-- 编辑标签弹窗 -->
+<div id="tag-modal" class="modal hidden" onclick="if(event.target===this)closeTagModal()">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h3 id="tag-modal-title">编辑便签</h3>
+      <span>
+        <button class="mini" onclick="toggleTagModalExpand()" id="btn-tag-modal-expand">展开</button>
+      </span>
+    </div>
+    <div id="tag-modal-list" class="tag-modal-list"></div>
+    <div class="modal-actions">
+      <button class="ghost" onclick="closeTagModal()">取消</button>
+      <button onclick="saveTagModal()">确定</button>
+    </div>
+  </div>
+</div>
+
+<!-- 属性弹窗 -->
+<div id="attr-modal" class="modal hidden" onclick="if(event.target===this)closeAttrModal()">
+  <div class="modal-box">
+    <h3>属性</h3>
+    <div id="attr-body" class="attr-body"></div>
+    <div class="modal-actions">
+      <button class="ghost" onclick="closeAttrModal()">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- 标签颜色弹窗 -->
+<div id="tag-color-modal" class="modal hidden" onclick="if(event.target===this)closeTagColor()">
+  <div class="modal-box tag-color-box">
+    <h3 id="tag-color-title">设置颜色</h3>
+    <div class="color-palette" id="tag-color-palette"></div>
+    <div class="color-preview-row">
+      <span>当前预览</span>
+      <span class="color-preview" id="tag-color-preview"></span>
+    </div>
+    <div class="modal-actions">
+      <button class="ghost" onclick="closeTagColor()">取消</button>
+      <button onclick="saveTagColor()">确定</button>
+    </div>
+  </div>
+</div>
+
+<!-- 设置弹窗 -->
+<div id="settings-modal" class="modal hidden" onclick="if(event.target===this)closeSettingsModal()">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h3>设置</h3>
+      <span>
+        <button class="mini" onclick="openHelpFloat()" title="查看使用帮助">📖 帮助</button>
+        <a class="mini feedback-link" href="https://www.bilibili.com/opus/1234314012554952704#reply404813517" target="_blank" rel="noopener">🐛 错误反馈</a>
+        <button class="modal-x" onclick="closeSettingsModal()" title="关闭">×</button>
+      </span>
+    </div>
+    <div class="settings-body">
+      <div class="settings-block">
+        <h4>🔍 搜索</h4>
+        <p class="muted" id="set-search-status">检测中…</p>
+        <div style="margin-top:12px">
+          <button onclick="setConnectEverything()">连接 Everything</button>
+          <span id="set-ev-status" class="search-feedback"></span>
+          <p class="muted">即使 Everything 之后才打开，点此按钮也能连上它的搜索引擎（毫秒级）</p>
+        </div>
+        <div style="margin-top:14px">
+          <button onclick="setBuildIndex()">构建本地索引</button>
+          <span id="set-build-status" class="search-feedback"></span>
+          <div id="set-index-progress" class="progress-wrap hidden">
+            <div class="progress-bar"><div id="set-index-bar" class="progress-fill"></div></div>
+            <span id="set-index-text" class="muted">准备中…</span>
+          </div>
+          <p class="muted">无需安装 Everything 也能搜索。点击后显示扫描进度。</p>
+        </div>
+        <div class="muted" style="margin-top:12px">
+          搜索机制：<br>
+          ⚡ Everything 引擎（装了 Everything 并连接后启用，毫秒级）<br>
+          📁 本地索引引擎（内置，无需任何外部软件）
+        </div>
+      </div>
+
+      <div class="settings-block">
+        <h4>🎬 动画</h4>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:6px">
+          <input type="checkbox" id="set-animations" style="width:auto" onchange="saveAnimSetting()"> 开启动画（低配置电脑可关闭，避免卡顿）
+        </label>
+      </div>
+
+      <div class="settings-block">
+        <h4>🏷 标签</h4>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:6px">
+          <input type="checkbox" id="set-migrate-tags" style="width:auto" onchange="saveMigrateSetting()"> 移动/重命名时迁移标签（关闭则清理旧路径的标签，避免残留）
+        </label>
+        <p class="muted" style="margin-top:6px">开启后，文件或文件夹移动/重命名，其标签会跟随到新位置；关闭则移除旧位置及子项的标签关联。</p>
+      </div>
+
+      <div class="settings-block">
+        <h4>💊 筛选胶囊</h4>
+        <div style="margin-top:10px">
+          <div class="muted" style="margin-bottom:4px">显示位置：</div>
+          <button onclick="setChipsPos('tree')" class="mini" id="btn-chips-pos-tree">标签树顶</button>
+          <button onclick="setChipsPos('top')" class="mini" id="btn-chips-pos-top">地址栏下方</button>
+        </div>
+        <div style="margin-top:10px">
+          <div class="muted" style="margin-bottom:4px">尺寸：</div>
+          <button onclick="setChipsSize('sm')" class="mini" id="btn-chips-size-sm">小</button>
+          <button onclick="setChipsSize('md')" class="mini" id="btn-chips-size-md">中</button>
+          <button onclick="setChipsSize('lg')" class="mini" id="btn-chips-size-lg">大</button>
+        </div>
+      </div>
+
+      <div class="settings-block">
+        <h4>🏷 标签备份</h4>
+        <p class="muted">导出：将当前所有标签及文件关联保存为一个文件，方便备份或转移到其他电脑。</p>
+        <div style="margin-top:6px">
+          <button onclick="exportTags()">导出标签备份</button>
+        </div>
+        <p class="muted" style="margin-top:10px">导入：从备份文件恢复标签。选择"确定"会清空现有标签后替换，选择"取消"则合并（保留现有标签）。</p>
+        <div style="margin-top:6px">
+          <button onclick="importTags()">导入标签备份</button>
+          <span id="set-tags-status" class="search-feedback"></span>
+        </div>
+      </div>
+
+      <div class="version-info">西煲 <strong>v0.5.3 beta</strong></div>
+      <div class="version-info author-line">作者 <a href="https://space.bilibili.com/128210" target="_blank" rel="noopener">@parukamun</a></div>
+      <div class="version-info free-note">该软件永久免费，付费了说明你被骗了！</div>
+      <div class="version-info" style="margin-top:10px">
+        <button class="mini" onclick="openChangelogFloat()">📜 更新日志</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 帮助浮窗（可拖动、可关闭） -->
+<div class="help-float hidden" id="help-float">
+  <div class="help-float-head" id="help-float-head">
+    <span>📖 帮助文档</span>
+    <button class="modal-x" onclick="closeHelpFloat()" title="关闭">×</button>
+  </div>
+  <div class="help-doc">
+    <details>
+      <summary>👋 这是什么？</summary>
+      <p>西煲是一个<strong>本地资源管理器</strong>，帮你浏览电脑里的所有文件（图片、视频、文档、代码等），并用<strong>标签</strong>把它们组织起来，方便随时查找。</p>
+      <p>它完全在本地运行，你的文件不会上传到任何地方。</p>
+      <p><strong>几个特别的地方：</strong></p>
+      <p>· <strong>文件夹也能贴标签</strong>：不只文件，整个文件夹都可以打标签，整理文件夹和文件一样方便。</p>
+      <p>· <strong>一个文件可以贴很多标签</strong>：同一个文件想归到好几个类里都行，以后按任意一个标签都能找到它。</p>
+      <p>· <strong>多标签组合查找</strong>：可以同时勾选多个标签来搜索，找到同时符合好几个条件的文件。</p>
+      <p style="color:#d93025;font-weight:600">本软件永久免费，付费了说明你被骗了！</p>
+    </details>
+
+    <details>
+      <summary>🧭 基本操作</summary>
+      <p><strong>浏览文件</strong>：左侧是「此电脑」目录树，点文件夹进入；中间是文件列表，双击文件用系统默认程序打开，双击文件夹进入。</p>
+      <p><strong>切换视图</strong>：顶部 ☰ 列表视图 / ▦ 网格视图按钮，右侧分段按钮可调节网格大小（50%–150%）。</p>
+      <p><strong>排序</strong>：右上角「排序：」菜单选择按名称/修改日期/类型排列，并选择递增/递减。文件夹始终排在文件前面。</p>
+      <p><strong>快速访问</strong>：右键文件夹 → 「⭐ 添加到快速访问」，常用目录固定在顶部书签。</p>
+    </details>
+
+    <details>
+      <summary>🔍 搜索文件</summary>
+      <p>右上角搜索框输入关键词（文件名或标签名），按回车或稍等即可搜索整个电脑。</p>
+      <p>装了 <strong>Everything</strong> 会用它（毫秒级）；没装也能用内置的本地索引（在设置里点「构建本地索引」）。</p>
+    </details>
+
+    <details>
+      <summary>🏷 使用标签</summary>
+      <p><strong>打标签</strong>：右键文件/文件夹 → 「编辑标签…」，勾选标签确定。如果标签是分层的，勾选了一个子标签，会自动连同它的上级标签一起记上，方便用大类查找。</p>
+      <p><strong>多选打标签</strong>：Ctrl/Shift 选中多个条目后右键 → 「追加标签…」，勾选的标签会添加给每个条目，原有标签不会丢失。</p>
+      <p><strong>筛选</strong>：单击标签 = 只看带该标签的文件；点标签左侧 🔖 进入多选筛选，可同时选多个标签。选中的标签会以胶囊形式显示在标签树上方（可在设置中改到地址栏下方、调整大小）。</p>
+      <p><strong>匹配方式</strong>：➖ 表示「同时满足所有选中标签」；➕ 表示「命中任一标签即可」。选中子标签时，其上级标签会自动让位（保留最精确的）。</p>
+      <p><strong>标签管理</strong>：右键标签可新建子标签、重命名、设置颜色、删除；顶部「展开/折叠」和「+」按钮管理层级。新建标签请到右侧标签树右键操作。</p>
+      <p><strong>筛选方案</strong>：筛选模式激活后点 📚，可把当前筛选保存成方案，之后一键应用。</p>
+    </details>
+
+    <details>
+      <summary>🖱 多选与右键</summary>
+      <p><strong>多选</strong>：按住 Ctrl 点选多个，或按住 Shift 范围选择；也可以在空白处按住左键拖动框选。</p>
+      <p><strong>右键菜单</strong>：单选时为编辑标签、清除标签、打开所在文件夹、重命名、删除（进回收站）、属性等；多选时为追加标签（原有标签不受影响）、清除标签、属性（可看多选条目的共同标签与全部标签）等。</p>
+      <p><strong>属性</strong>：单选右键「属性」显示文件信息与标签（标签以「父级 > 子级」层级展示）；多选右键「属性」可看选中条目的共同标签与全部标签摘要。</p>
+      <p><strong>拖拽</strong>：把文件拖到目录树上的文件夹，可移动文件到该目录。</p>
+    </details>
+
+    <details>
+      <summary>⌨️ 快捷键</summary>
+      <p>方向键：上下移动选中</p>
+      <p>→ 进入选中文件夹 · ← / Backspace：返回上级</p>
+      <p>Enter：打开 · 空格：快速预览（图片/视频/文本）</p>
+      <p>F2：重命名 · Delete：删除</p>
+      <p>F：属性 · E：编辑标签/追加标签 · Shift+F：切换筛选模式</p>
+      <p>Ctrl+A：全选 · Esc：关闭弹窗/菜单</p>
+    </details>
+
+    <details>
+      <summary>⚙️ 常见设置</summary>
+      <p><strong>动画</strong>：低配置电脑可关闭动画开关，界面更流畅。</p>
+      <p><strong>标签迁移</strong>：开启后，文件/文件夹移动或重命名时，标签会跟随到新位置；关闭则清理旧位置的标签关联（默认关闭）。</p>
+      <p><strong>筛选胶囊</strong>：可切换胶囊显示位置（标签树顶 / 地址栏下方）与尺寸（小/中/大）。</p>
+      <p><strong>标签备份</strong>：导出/导入标签，方便换电脑或备份。</p>
+    </details>
+  </div>
+  <div class="help-float-foot">
+    <label><input type="checkbox" id="help-no-more" onchange="saveHelpNoMore()"> 下次不再提示</label>
+  </div>
+</div>
+
+<!-- 更新日志浮窗（可拖动、可关闭） -->
+<div class="help-float hidden" id="changelog-float" style="left:auto;right:24px">
+  <div class="help-float-head" id="changelog-float-head">
+    <span>📜 更新日志</span>
+    <button class="modal-x" onclick="closeChangelogFloat()" title="关闭">×</button>
+  </div>
+  <div class="help-doc">
+    <details open>
+      <summary>v0.5.3</summary>
+      <p>· 新增：卸载时检测西煲是否正在运行——先询问是否关闭，避免卸载失败</p>
+      <p>· 新增：卸载完成后询问是否删除本地数据（标签/索引/备份，默认保留），可选彻底清除</p>
+      <p>· 新增：数据库迁移机制——升级版本时自动备份旧库，迁移失败自动回滚恢复，杜绝升级丢数据</p>
+      <p>· 调整：安装包固定应用标识（AppId），保证后续版本升级可识别为覆盖安装</p>
+    </details>
+    <details>
+      <summary>v0.5.2</summary>
+      <p>· 新增：多选后右键「追加标签…」，勾选标签会加到每个选中条目上，原有标签不会被覆盖</p>
+      <p>· 新增：设置里「移动/重命名时迁移标签」开关——开启后标签跟随到新路径；关闭则清理旧位置及子项的标签关联（默认关闭）</p>
+      <p>· 新增：多选后右键「属性」可查看选中项的共同标签与全部标签（并集/交集摘要）</p>
+      <p>· 新增：属性弹窗的标签改为「父级 > 子级」层级展示，不再平铺重复父级</p>
+      <p>· 新增：筛选模式选中子标签时自动移除同链父级（保留最精确的），避免冗余</p>
+      <p>· 新增：筛选胶囊支持自定义标签颜色（有颜色用标签色，否则默认蓝）</p>
+      <p>· 新增：设置里可选筛选胶囊显示位置（标签树顶 / 地址栏下方）与尺寸（小/中/大）</p>
+      <p>· 新增：首次启动的示例标签加入三级层级并分配颜色，便于演示多级标签</p>
+      <p>· 新增：快捷键——F 属性、E 编辑/追加标签、Shift+F 切换筛选模式，右键菜单同步显示按键提示</p>
+      <p>· 调整：移除编辑/追加标签弹窗内的「新建标签」功能，标签新建统一在右侧标签树右键操作</p>
+      <p>· 修复：多选时「清除标签」只清右键那一个的问题，现在会清掉全部选中项</p>
+      <p>· 修复：把文件夹移到自身时偶发报错的问题</p>
+      <p>· 修复：移动/重命名文件后，旧的标签关联可能残留成孤儿数据的问题</p>
+      <p>· 修复：源码启动方式下会重复打开两个浏览器标签页的问题</p>
+    </details>
+    <details>
+      <summary>v0.5.1</summary>
+      <p>· 修复：开着代理（Clash 等）或上次进程未退出时报错的问题</p>
+      <p>· 新增：系统托盘图标（左键打开西煲，右键可退出）</p>
+      <p>· 新增：动态端口——默认 8788 被占用时自动识别残留并清理，或换空闲端口</p>
+      <p>· 新增：退出时自动清理进程，不留残留</p>
+      <p>· 调整：帮助手册每次启动弹出，浮窗底部"下次不再提示"复选框可关闭，取消勾选恢复</p>
+      <p>· 修复：首次启动自动创建示例标签，帮助新用户上手</p>
+    </details>
+    <details>
+      <summary>v0.5.0</summary>
+      <p>· 首个打包发布版</p>
+      <p>· 本地资源管理器 + 标签体系 + 搜索</p>
+      <p>· 首次使用自动弹出帮助，内置完整帮助文档</p>
+    </details>
+  </div>
+</div>
+
+<link rel="stylesheet" href="{{ url_for('static', filename='vendor/jstree.min.css') }}?v=1">
+<script src="{{ url_for('static', filename='vendor/jquery.min.js') }}?v=1"></script>
+<script src="{{ url_for('static', filename='vendor/jstree.min.js') }}?v=1"></script>
+<script src="{{ url_for('static', filename='vendor/Sortable.min.js') }}?v=1"></script>
+<script src="{{ url_for('static', filename='file-icons.js') }}?v=1"></script>
+<script src="{{ url_for('static', filename='explorer-core.js') }}?v=6"></script>
+<script src="{{ url_for('static', filename='explorer-tree.js') }}?v=5"></script>
+<script src="{{ url_for('static', filename='explorer-tags.js') }}?v=6"></script>
+<script src="{{ url_for('static', filename='explorer-quicklook.js') }}?v=1"></script>
+<script src="{{ url_for('static', filename='explorer-keys.js') }}?v=2"></script>
+<script src="{{ url_for('static', filename='explorer-ui.js') }}?v=5"></script>
+<script src="{{ url_for('static', filename='explorer-tags-jstree.js') }}?v=3"></script>
+<script src="{{ url_for('static', filename='explorer-schemes.js') }}?v=1"></script>
+<script src="{{ url_for('static', filename='settings.js') }}?v=2"></script>
+{% endblock %}
