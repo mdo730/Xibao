@@ -6,6 +6,7 @@ function openSettingsModal() {
   if (cb) cb.checked = localStorage.getItem('xibao_animations') !== '0';
   loadMigrateSetting();
   renderChipsSettingUI();
+  updateAliasColorPreview();
 }
 function closeSettingsModal() {
   modalHide(document.getElementById('settings-modal'));
@@ -238,3 +239,74 @@ function closeChangelogFloat() {
     document.addEventListener('mouseup', up);
   });
 })();
+
+// ---- 备注名底色（复用标签树调色板） ----
+let _aliasColorMode = false;
+function openAliasColorPalette() {
+  const colors = (typeof PALETTE !== 'undefined') ? PALETTE : [
+    '#ecc889', '#f0c6c6', '#f5d9a8', '#d9f0c6', '#c6e8f0',
+    '#d9c6f0', '#f0e0c6', '#c6f0d9', '#f0c6e0', '#c6c6f0',
+    '#f5f5dc', '#ffd700', '#ff8c00', '#ff6347', '#32cd32',
+    '#00bfff', '#9370db', '#ff69b4', '#a9a9a9', '#000000',
+  ];
+  _aliasColorMode = true;
+  document.getElementById('tag-color-title').textContent = '选择备注名底色';
+  const palette = document.getElementById('tag-color-palette');
+  palette.innerHTML = '';
+  colors.forEach(c => {
+    const sw = document.createElement('div');
+    sw.className = 'color-swatch' + (c === aliasBg() ? ' sel' : '');
+    sw.style.background = c;
+    sw.dataset.color = c;
+    sw.onclick = () => {
+      palette.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('sel'));
+      sw.classList.add('sel');
+      updateColorPreview();
+    };
+    palette.appendChild(sw);
+  });
+  updateColorPreview();
+  modalShow(document.getElementById('tag-color-modal'));
+}
+function updateColorPreview() {
+  const p = document.getElementById('tag-color-preview');
+  if (!p) return;
+  const sel = document.querySelector('#tag-color-palette .color-swatch.sel');
+  p.style.background = sel ? sel.dataset.color : aliasBg();
+}
+function saveTagColor() {
+  const sel = document.querySelector('#tag-color-palette .color-swatch.sel');
+  if (_aliasColorMode) {
+    if (sel) setAliasBg(sel.dataset.color);
+    _aliasColorMode = false;
+    modalHide(document.getElementById('tag-color-modal'));
+    updateAliasColorPreview();
+    if (typeof refresh === 'function') refresh();
+    return;
+  }
+  if (tagCtxItem) {
+    selColor = sel ? sel.dataset.color : selColor;
+    fetch('/api/tags/' + tagCtxItem.id + '/color', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({color: selColor})}).then(() => {
+      loadTags(); refresh();
+    });
+    modalHide(document.getElementById('tag-color-modal'));
+  }
+}
+function updateAliasColorPreview() {
+  const sw = document.getElementById('alias-color-preview');
+  if (sw) sw.style.background = aliasBg();
+}
+async function clearAllAliases() {
+  if (!confirm('确定要清除所有备注名吗？\n\n此操作将删除所有文件/文件夹的备注名，且不可恢复。\n\n（真实文件名不受影响）')) return;
+  try {
+    const r = await fetch('/api/alias/clear-all', {method: 'POST'});
+    const d = await r.json();
+    if (!d.ok) { alert('清除失败: ' + (d.error || '')); return; }
+    alert('已清除所有备注名');
+    if (typeof refresh === 'function') refresh();
+  } catch (e) { alert('清除失败: ' + e.message); }
+}
+window.closeTagColor = function () {
+  _aliasColorMode = false;
+  modalHide(document.getElementById('tag-color-modal'));
+};

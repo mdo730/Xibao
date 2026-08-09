@@ -51,6 +51,39 @@ function quickRemove() {
 }
 renderQuickAccess();
 
+// ---- 文件树宽度可拖拽（存 localStorage） ----
+const FTREE_WIDTH_KEY = 'xibao_filetree_width';
+function restoreFileTreeWidth() {
+  const panel = document.getElementById('filetree-panel');
+  if (!panel) return;
+  const saved = parseInt(localStorage.getItem(FTREE_WIDTH_KEY) || '0', 10);
+  if (saved >= 140) panel.style.width = saved + 'px';
+}
+function initFileTreeResizer() {
+  const resizer = document.getElementById('filetree-resizer');
+  const panel = document.getElementById('filetree-panel');
+  if (!resizer || !panel) return;
+  restoreFileTreeWidth();
+  resizer.addEventListener('mousedown', e => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = panel.offsetWidth;
+    function move(ev) {
+      let w = startW + (ev.clientX - startX);
+      w = Math.max(140, Math.min(w, 500));
+      panel.style.width = w + 'px';
+    }
+    function up() {
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', up);
+      localStorage.setItem(FTREE_WIDTH_KEY, panel.offsetWidth);
+    }
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+  });
+}
+initFileTreeResizer();
+
 // 拖到文件树目录 → 移动（带确认，防误操作）
 async function handleDropOnTree(e, destPath) {
   const payload = e.dataTransfer.getData('text/plain');
@@ -95,7 +128,7 @@ async function renderTreeItem(node, depth, parentEl) {
   label.className = 'tree-label';
   label.textContent = node.name;
   div.appendChild(label);
-  div.style.paddingLeft = (depth * 14 + 8) + 'px';
+  div.style.paddingLeft = (Math.min(depth, 8) * 14 + 8) + 'px';
 
   const childrenWrap = document.createElement('div');
   childrenWrap.className = 'tree-children';

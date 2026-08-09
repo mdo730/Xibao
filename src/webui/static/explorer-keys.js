@@ -61,6 +61,18 @@ function handleKey(e) {
     if (it) onItemDblClick(it.path, it.isFolder);
   }
   else if (e.key === 'Backspace') { e.preventDefault(); navUp(); }
+  else if (e.key === 'Q' || e.key === 'q') {
+    e.preventDefault();
+    // Q：切换显示模式（文件名 / 备注名）
+    toggleDisplayMode();
+  }
+  else if (e.key === 'R' || e.key === 'r') {
+    e.preventDefault();
+    // R：设置备注名（仅单选）
+    if (selected.size > 1) return;
+    const c = (typeof currentCtx === 'function') ? currentCtx() : null;
+    if (c) ctxSetAlias();
+  }
   else if (e.key === 'F2') {
     e.preventDefault();
     if (selected.size === 1) {

@@ -9,7 +9,10 @@ A local file manager built around a hierarchical tag tree. Organize images, vide
 - 🏷 无限级标签树 / Unlimited hierarchical tags (N levels)
 - 📁 文件与文件夹都能打标 / Tag both files and folders
 - 🔍 多标签交集(AND)/并集(OR)组合筛选 / Multi-tag filter with AND/OR
+- 💾 标签一键导出/导入（可读 JSON，损坏可恢复）/ One-click JSON backup & restore
+- 🔄 升级自动迁移旧数据，迁移前自动备份 / Auto schema migration with pre-migration backup
 - ⚡ Everything 搜索 + 内置本地索引 / Everything IPC + built-in local index
+- 🎬 视频缩略图（内置解码，无需外部软件）/ Video thumbnails (built-in decoder)
 - 🔒 全程离线、数据全在本地 / 100% offline, all data stays local
 - 🆓 永久免费 / Free forever
 
@@ -20,19 +23,19 @@ A local file manager built around a hierarchical tag tree. Organize images, vide
   - 网格缩放（50%–150% 五档分段按钮）
   - 快速访问（右键文件夹添加到顶部收藏）
   - 框选 / Ctrl / Shift 多选、右键菜单、拖拽移动
+  - 目录树宽度可拖拽调节，深度缩进自动封顶
 - **搜索**：Everything 引擎（若已安装）→ 本地索引（内置，免依赖）分层兜底
 - **标签体系**：多级标签树 + 颜色标记
   - 单击 = 单标签筛选；🔖 书签按钮进入多选筛选模式（and/else 两种匹配）
   - 打标签自动继承父级属性（勾选子级隐式带上所有祖先标签）
   - 筛选方案（可保存/编辑/排序/标注颜色的小浮窗）
+  - 多选追加标签（不覆盖原有标签）、批量清除标签
+- **备注名（Alias）**：文件/文件夹可设"只在西煲内显示"的名称，不修改真实文件名；可在文件名/备注名显示间一键切换（快捷键 Q）
 - **预览**：空格键 QuickLook（图片/视频/文本）
+- **视频缩略图**：网格视图自动显示视频预览帧，内置解码（支持 MP4/MKV 等），生成后缓存
+- **数据安全**：标签导出/导入（可读 JSON）、启动自动备份、升级自动迁移旧库（迁移前自动备份）
 - **动画**：列表/树展开动画，可在设置中关闭（低配置电脑）
-
-## 运行
-
-```bash
-python -m src.webui.app --port 8788   # 自动打开浏览器访问 http://127.0.0.1:8788
-```
+- **帮助**：内置完整帮助文档（标签继承、AND/OR 匹配等核心概念）
 
 ## 模块结构
 
@@ -54,6 +57,7 @@ src/
 ## 数据位置
 
 - 标签、搜索索引、聊天等：`%APPDATA%\Xibao\`（不依赖 exe 位置，便于分享）
+- 缩略图缓存：`%LOCALAPPDATA%\Xibao\thumbnails\`
 
 ## 运行
 

@@ -1,4 +1,4 @@
-"""WebUI：Flask 应用。
+﻿"""WebUI：Flask 应用。
 
 用法：
     python -m src.webui.app [--port 8788]
@@ -46,7 +46,7 @@ def images_page():
 @app.get("/api/health")
 def api_health():
     """健康探测：带唯一标记，用于残留进程识别（启动时）。"""
-    return jsonify({"ok": True, "app": "xibao", "version": "0.5.3"})
+    return jsonify({"ok": True, "app": "xibao", "version": "0.5.4"})
 
 
 @app.get("/api/help-seen")
@@ -132,6 +132,15 @@ def api_images():
                 store.close()
         else:
             data = lib.list_dir(path, limit=limit)
+        # 注入备注名（一次性查映射，避免逐条 N+1）
+        store = Store()
+        try:
+            aliases = store.all_aliases()
+        finally:
+            store.close()
+        for it in list(data.get("folders", [])) + list(data.get("files", [])):
+            p = (it.get("path") or "").replace("\\", "/").rstrip("/")
+            it["alias"] = aliases.get(p)
         data["images"] = data.get("files", [])
         return jsonify({"ok": True, "dir": data["dir"],
                         "folders": data["folders"], "files": data.get("files", []),
@@ -226,6 +235,41 @@ def api_folder_set_tags(folder_path):
     store = Store()
     try:
         store.set_folder_tags(folder_path.rstrip("/"), [int(t) for t in tag_ids])
+        return jsonify({"ok": True})
+    finally:
+        store.close()
+
+
+@app.get("/api/alias/<path:path>")
+def api_alias_get(path):
+    store = Store()
+    try:
+        return jsonify({"ok": True, "path": path.rstrip("/"),
+                        "alias": store.get_alias(path.rstrip("/"))})
+    finally:
+        store.close()
+
+
+@app.post("/api/alias")
+def api_alias_set():
+    data = request.get_json(force=True) or {}
+    path = (data.get("path") or "").rstrip("/")
+    alias = data.get("alias") or ""
+    if not path:
+        return jsonify({"ok": False, "error": "缺少路径"}), 400
+    store = Store()
+    try:
+        store.set_alias(path, alias)
+        return jsonify({"ok": True})
+    finally:
+        store.close()
+
+
+@app.post("/api/alias/clear-all")
+def api_alias_clear_all():
+    store = Store()
+    try:
+        store.clear_all_aliases()
         return jsonify({"ok": True})
     finally:
         store.close()
@@ -461,19 +505,34 @@ def api_filetree_children():
 
 # ---------- 搜索 API ----------
 
+def _attach_aliases(items, aliases):
+    """给条目注入备注名（key 规范化一致）。"""
+    for it in items:
+        p = (it.get("path") or "").replace("\\", "/").rstrip("/")
+        it["alias"] = aliases.get(p)
+    return items
+
+
 @app.get("/api/search")
 def api_search():
-    """分层搜索：Everything IPC → 本地索引。任何异常自动降级，不崩溃。"""
+    """分层搜索：Everything IPC → 本地索引。任何异常自动降级，不崩溃。
+
+    同时按备注名匹配：命中 alias 的路径也并入结果（去重）。
+    """
     q = (request.args.get("q") or "").strip().lower()
     if not q:
         return jsonify({"ok": True, "folders": [], "files": []})
+    store = Store()
+    try:
+        aliases = store.all_aliases()
+    finally:
+        store.close()
     # 第1层：Everything IPC
     try:
         from ..images import everything_search
         ev_folders, ev_files = everything_search.search(q, limit=300)
         if ev_folders is not None:
-            return jsonify({"ok": True, "folders": ev_folders, "files": ev_files,
-                            "engine": "everything"})
+            return _search_result(ev_folders, ev_files, aliases, q, "everything")
     except Exception as e:
         log.warning("Everything 搜索异常，降级到本地索引: %s", e)
     # 第2层：本地索引（兜底）
@@ -485,11 +544,44 @@ def api_search():
                             "error": "正在建立搜索索引（可能需要几分钟），请稍后再试。"})
         folders, files = indexer.search(q)
         _start_index_build(mode="incremental")  # 后台补扫缺失盘
-        return jsonify({"ok": True, "folders": folders, "files": files,
-                        "engine": "local"})
+        return _search_result(folders, files, aliases, q, "local")
     except Exception as e:
         log.warning("本地索引搜索异常: %s", e)
         return jsonify({"ok": False, "error": f"搜索暂不可用: {e}"}), 500
+
+
+def _search_result(folders, files, aliases, q, engine):
+    """搜索结果：注入备注名 + 并入 alias 命中的路径（去重）。"""
+    import os as _os
+    seen = set()
+    merged_folders, merged_files = [], []
+    for it in list(folders) + list(files):
+        p = it.get("path") or ""
+        if p in seen:
+            continue
+        seen.add(p)
+        if _os.path.isdir(p):
+            merged_folders.append(it)
+        else:
+            merged_files.append(it)
+    # alias 命中：alias 含关键词且路径存在
+    alias_hits = [p for p, a in aliases.items() if q in (a or "").lower()]
+    for p in alias_hits:
+        if p in seen:
+            continue
+        seen.add(p)
+        if _os.path.isdir(p):
+            from ..images import library as lib
+            merged_folders.append(lib._folder_card(p, with_preview=False))
+        elif _os.path.isfile(p):
+            from ..images import library as lib
+            merged_files.append({"name": _os.path.basename(p), "path": p,
+                                 "type": lib.file_type(_os.path.basename(p)),
+                                 **lib._file_meta(p)})
+    _attach_aliases(merged_folders, aliases)
+    _attach_aliases(merged_files, aliases)
+    return jsonify({"ok": True, "folders": merged_folders, "files": merged_files,
+                    "engine": engine})
 
 
 @app.get("/api/search/status")
@@ -570,6 +662,27 @@ def serve_image(name):
     if not os.path.isfile(path):
         return jsonify({"error": "not found"}), 404
     return send_file(path)
+
+
+@app.get("/api/thumb")
+def api_thumb():
+    """视频缩略图：后台生成 + 缓存，未生成时返回占位。"""
+    from ..images import thumbnail
+    path = request.args.get("path") or ""
+    try:
+        size = int(request.args.get("size") or 256)
+    except ValueError:
+        size = 256
+    if not path:
+        return jsonify({"ok": False, "error": "缺少路径"}), 400
+    # 命中缓存直接返回
+    ok, thumb_path = thumbnail.get_video_thumb(path, size)
+    if ok and thumb_path:
+        return send_file(thumb_path, mimetype="image/jpeg", max_age=86400)
+    # 未生成/失败：触发后台生成，返回占位（404 由前端回退图标）
+    if not thumbnail.is_failed(path, size):
+        thumbnail.request_thumb(path, size)
+    return jsonify({"ok": False, "error": "not ready"}), 404
 
 
 def _seed_default_tags():

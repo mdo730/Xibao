@@ -48,6 +48,11 @@ class Store:
             folder_path TEXT NOT NULL,
             tag_id INTEGER NOT NULL,
             created_at TEXT DEFAULT (datetime('now','localtime')))""")
+        c.execute("""CREATE TABLE IF NOT EXISTS path_aliases (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            path TEXT NOT NULL UNIQUE,
+            alias TEXT NOT NULL,
+            created_at TEXT DEFAULT (datetime('now','localtime')))""")
         ver = _current_schema_version(c)
         if ver is None:
             c.execute("INSERT INTO meta (key, value) VALUES ('schema_version', ?)",
@@ -207,9 +212,9 @@ class Store:
         self._conn.commit()
 
     def move_tags(self, old_path, new_path, migrate=True):
-        """移动/重命名路径后，处理该路径及子路径的标签关联。
+        """移动/重命名路径后，处理该路径及子路径的标签关联与备注名。
 
-        migrate=True: 标签跟随，把旧路径前缀下的关联改写到新路径；
+        migrate=True: 标签/备注名跟随，把旧路径前缀下的关联改写到新路径；
         migrate=False: 清理旧路径（及子路径）的关联，杜绝孤儿记录。
         路径统一正斜杠。
         """
@@ -222,9 +227,16 @@ class Store:
                 "UPDATE folder_tags SET folder_path = ? || substr(folder_path, ?) "
                 "WHERE folder_path = ? OR folder_path LIKE ?",
                 (new, len(old) + 1, old, old + "/%"))
+            self._conn.execute(
+                "UPDATE path_aliases SET path = ? || substr(path, ?) "
+                "WHERE path = ? OR path LIKE ?",
+                (new, len(old) + 1, old, old + "/%"))
         else:
             self._conn.execute(
                 "DELETE FROM folder_tags WHERE folder_path = ? OR folder_path LIKE ?",
+                (old, old + "/%"))
+            self._conn.execute(
+                "DELETE FROM path_aliases WHERE path = ? OR path LIKE ?",
                 (old, old + "/%"))
         self._conn.commit()
 
@@ -237,15 +249,49 @@ class Store:
             (folder_path,)).fetchall()
         return [dict(r) for r in rows]
 
+    # ---------- 备注名（alias） ----------
+
+    def get_alias(self, path):
+        """返回某路径的备注名，无则返回 None。路径统一正斜杠。"""
+        path = path.replace("\\", "/").rstrip("/")
+        row = self._conn.execute(
+            "SELECT alias FROM path_aliases WHERE path=?", (path,)).fetchone()
+        return row["alias"] if row else None
+
+    def set_alias(self, path, alias):
+        """设置/更新备注名；alias 为空则删除。路径统一正斜杠。"""
+        path = path.replace("\\", "/").rstrip("/")
+        alias = (alias or "").strip()
+        if not alias:
+            self._conn.execute("DELETE FROM path_aliases WHERE path=?", (path,))
+        else:
+            self._conn.execute(
+                "INSERT INTO path_aliases (path, alias) VALUES (?,?) "
+                "ON CONFLICT(path) DO UPDATE SET alias=excluded.alias",
+                (path, alias))
+        self._conn.commit()
+
+    def all_aliases(self):
+        """返回所有备注名映射 {path: alias}。"""
+        rows = self._conn.execute("SELECT path, alias FROM path_aliases").fetchall()
+        return {r["path"]: r["alias"] for r in rows}
+
+    def clear_all_aliases(self):
+        """清空所有备注名。"""
+        self._conn.execute("DELETE FROM path_aliases")
+        self._conn.commit()
+
     # ---------- 标签备份/恢复 ----------
 
     def export_tags(self):
-        """导出标签树与关联为可序列化 dict。"""
+        """导出标签树、关联与备注名为可序列化 dict。"""
         tags = [dict(r) for r in self._conn.execute(
             "SELECT id, name, parent_id FROM image_tags ORDER BY id").fetchall()]
         rels = [dict(r) for r in self._conn.execute(
             "SELECT folder_path, tag_id FROM folder_tags ORDER BY id").fetchall()]
-        return {"tags": tags, "relations": rels}
+        aliases = [dict(r) for r in self._conn.execute(
+            "SELECT path, alias FROM path_aliases ORDER BY id").fetchall()]
+        return {"tags": tags, "relations": rels, "aliases": aliases}
 
     def import_tags(self, data, mode="replace"):
         """导入标签树与关联。
@@ -256,9 +302,11 @@ class Store:
         """
         tags = data.get("tags") or []
         rels = data.get("relations") or []
+        aliases = data.get("aliases") or []
         if mode == "replace":
             self._conn.execute("DELETE FROM folder_tags")
             self._conn.execute("DELETE FROM image_tags")
+            self._conn.execute("DELETE FROM path_aliases")
             id_map = {}
             for t in tags:
                 parent = id_map.get(t.get("parent_id"))
@@ -300,6 +348,9 @@ class Store:
                         self._conn.execute(
                             "INSERT INTO folder_tags (folder_path, tag_id) VALUES (?,?)",
                             (r["folder_path"], tid))
+        # 导入备注名（replace 已清空；merge 覆盖同名路径）
+        for a in aliases:
+            self.set_alias(a.get("path") or "", a.get("alias") or "")
         self._conn.commit()
 
     def close(self):

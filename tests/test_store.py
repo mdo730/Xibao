@@ -206,3 +206,62 @@ def test_export_import_merge_dedupes_relations(store):
 def test_schema_version_set(store):
     from src.memory.store import SCHEMA_VERSION
     assert store.get_meta("schema_version") == str(SCHEMA_VERSION)
+
+
+# ---------- 备注名（alias） ----------
+
+def test_alias_set_get(store):
+    assert store.get_alias("C:/x/y") is None
+    store.set_alias("C:/x/y", "我的项目")
+    assert store.get_alias("C:/x/y") == "我的项目"
+    assert store.get_alias(r"C:\x\y") == "我的项目"  # 反斜杠兼容
+
+
+def test_alias_clear(store):
+    store.set_alias("C:/x/y", "别名")
+    store.set_alias("C:/x/y", "")
+    assert store.get_alias("C:/x/y") is None
+
+
+def test_alias_update(store):
+    store.set_alias("C:/x/y", "别名1")
+    store.set_alias("C:/x/y", "别名2")
+    assert store.get_alias("C:/x/y") == "别名2"
+
+
+def test_alias_all_aliases(store):
+    store.set_alias("C:/a", "甲")
+    store.set_alias("C:/b", "乙")
+    assert store.all_aliases() == {"C:/a": "甲", "C:/b": "乙"}
+
+
+def test_alias_in_export_import(store):
+    store.set_alias("C:/x/y", "别名")
+    data = store.export_tags()
+    assert data["aliases"] != []
+    store2 = Store(os.path.join(os.path.dirname(store.db_path), "mem2.db"))
+    store2.import_tags(data, mode="replace")
+    assert store2.get_alias("C:/x/y") == "别名"
+    store2.close()
+
+
+def test_alias_moves_with_migrate(store):
+    store.set_alias("C:/x/y", "别名")
+    store.move_tags("C:/x/y", "C:/new/y", migrate=True)
+    assert store.get_alias("C:/x/y") is None
+    assert store.get_alias("C:/new/y") == "别名"
+
+
+def test_alias_cleaned_without_migrate(store):
+    store.set_alias("C:/x/y", "别名")
+    store.move_tags("C:/x/y", "C:/new/y", migrate=False)
+    assert store.get_alias("C:/x/y") is None
+    assert store.get_alias("C:/new/y") is None
+
+
+def test_alias_clear_all(store):
+    store.set_alias("C:/a", "甲")
+    store.set_alias("C:/b", "乙")
+    store.clear_all_aliases()
+    assert store.all_aliases() == {}
+    assert store.get_alias("C:/a") is None

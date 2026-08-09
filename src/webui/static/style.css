@@ -89,6 +89,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: #0b57d0
 @keyframes modal-fade-out { from { opacity: 1; } to { opacity: 0; } }
 @keyframes modal-pop-out { from { opacity: 1; transform: scale(1) translateY(0); } to { opacity: 0; transform: scale(.94) translateY(8px); } }
 .modal { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: flex; align-items: center; justify-content: center; z-index: 300; }
+.modal.modal-top { z-index: 400; }
 .modal.anim-in { animation: modal-fade-in .18s ease both; }
 .modal.anim-out { animation: modal-fade-out .15s ease both; }
 .modal-box { background: #fff; border-radius: 10px; padding: 20px; width: 400px; max-height: 82vh; display: flex; flex-direction: column; box-shadow: 0 8px 30px rgba(0,0,0,.2); }
@@ -119,6 +120,8 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: #0b57d0
 .ctx-menu div { padding: 8px 12px; font-size: 13px; cursor: pointer; border-radius: 5px; }
 .ctx-menu div:hover { background: #f2f2f2; }
 .ctx-key { float: right; color: #999; font-size: 11px; margin-left: 14px; }
+.alias-name { display: inline-block; padding: 0 3px; border-radius: 3px; }
+.alias-mode-btn { min-width: 88px; }
 
 /* ---- 忽略列表 ---- */
 #ignored-panel { margin-top: 14px; max-width: 640px; }
@@ -304,7 +307,9 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: #0b57d0
 .explorer-tools { display: flex; align-items: center; gap: 6px; padding: 6px 14px; background: #fff; border-bottom: 1px solid #e5e5e5; flex-wrap: wrap; }
 
 .exp-left-main { flex: 1; display: flex; min-height: 0; position: relative; }
-.filetree-panel { width: 200px; background: #fff; border-right: 1px solid #e5e5e5; display: flex; flex-direction: column; flex-shrink: 0; }
+.filetree-panel { width: 200px; background: #fff; border-right: 1px solid #e5e5e5; display: flex; flex-direction: column; flex-shrink: 0; position: relative; }
+.filetree-resizer { position: absolute; top: 0; right: -3px; width: 6px; height: 100%; cursor: col-resize; z-index: 5; }
+.filetree-resizer:hover { background: rgba(11, 87, 208, .15); }
 .filetree-panel.collapsed { width: 40px; }
 .filetree-panel.collapsed .file-tree, .filetree-panel.collapsed .search-input { display: none; }
 .search-input { margin: 6px 8px; width: calc(100% - 16px); }

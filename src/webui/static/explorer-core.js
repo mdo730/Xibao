@@ -24,6 +24,51 @@ const UNTAGGED_ID = -1;
 const TYPE_ICON = {folder:'📁', image:'🖼', video:'🎬', audio:'🎵', pdf:'📕', doc:'📄', archive:'🗜', code:'💻', other:'📄'};
 function iconOf(t) { return TYPE_ICON[t] || '📄'; }
 
+// ---- 备注名（alias）显示工具 ----
+const ALIAS_MODE_KEY = 'xibao_alias_mode';     // 'file'=以文件名为主 | 'alias'=以备注名为主
+const ALIAS_BG_KEY = 'xibao_alias_bg';         // 备注名底色
+function aliasMode() { return localStorage.getItem(ALIAS_MODE_KEY) === 'alias' ? 'alias' : 'file'; }
+function setAliasMode(m) { localStorage.setItem(ALIAS_MODE_KEY, m); }
+function toggleAliasMode() { setAliasMode(aliasMode() === 'alias' ? 'file' : 'alias'); }
+function aliasBg() { return localStorage.getItem(ALIAS_BG_KEY) || '#e8f0fe'; }
+function setAliasBg(c) { localStorage.setItem(ALIAS_BG_KEY, c); }
+// 取显示名：优先显示模式决定；对偶名用于悬停提示
+function displayName(it) {
+  if (aliasMode() === 'alias' && it.alias) return it.alias;
+  return it.name;
+}
+function hintName(it) {
+  // 显示的是别名时提示真名；显示真名且有条目别名时提示别名
+  if (aliasMode() === 'alias') return it.alias ? it.name : '';
+  return it.alias || '';
+}
+// 名字 HTML：是否带底色（仅当显示的确实是别名时）
+function nameHtml(it) {
+  const shown = displayName(it);
+  const isAliasShown = aliasMode() === 'alias' && it.alias;
+  const hint = hintName(it);
+  let title = hint ? `名称: ${hint}` : '';
+  const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  let inner = esc(shown);
+  if (isAliasShown) {
+    inner = `<span class="alias-name" style="background:${aliasBg()}" title="${esc(title)}">${inner}</span>`;
+  } else if (hint) {
+    inner = `<span title="${esc(title)}">${inner}</span>`;
+  }
+  return inner;
+}
+// 切换显示模式（文件名 / 备注名），Q 键与工具栏按钮共用
+function toggleDisplayMode() {
+  toggleAliasMode();
+  updateAliasModeBtn();
+  refresh();
+}
+function updateAliasModeBtn() {
+  const btn = document.getElementById('btn-alias-mode');
+  if (!btn) return;
+  btn.textContent = aliasMode() === 'alias' ? '备注名 (Q)' : '文件名 (Q)';
+}
+
 function selKeys() { return Array.from(selected); }
 function relUrl(p) {
   // p 是真实路径，转 URL（反斜杠→正斜杠，逐段编码）
@@ -33,20 +78,62 @@ function relUrl(p) {
 function encPath(p) { return p.replace(/\\/g, '/').split('/').filter(Boolean).map(encodeURIComponent).join('/'); }
 
 // ---- 导航 ----
-function pushHist() {
-  if (navIdx >= 0 && navHist[navIdx] === currentPath) return;
-  navHist = navHist.slice(0, navIdx + 1);
-  navHist.push(currentPath);
+// 历史 = 去过的位置列表；navIdx 指向当前显示的位置（navHist[navIdx] === currentPath）
+function navTo(path) {
+  // 统一正斜杠，保证历史/比较一致
+  if (path) path = path.replace(/\\/g, '/');
+  // 目标已在历史中 → 直接跳回该位置（避免重复条目）
+  const exist = navHist.indexOf(path);
+  if (exist >= 0) {
+    navIdx = exist;
+    currentPath = path;
+    currentTagIds = [];
+    refresh();
+    return;
+  }
+  // 当前位置若不在栈顶，先压入当前位置（作为来路）
+  if (!(navIdx >= 0 && navHist[navIdx] === currentPath)) {
+    navHist = navHist.slice(0, navIdx + 1);
+    navHist.push(currentPath);
+    navIdx = navHist.length - 1;
+  }
+  // 前进到新位置
+  navHist.push(path);
   navIdx = navHist.length - 1;
+  currentPath = path;
+  currentTagIds = [];
+  refresh();
 }
-function navTo(path) { pushHist(); currentPath = path; currentTagIds = []; refresh(); }
-function navBack() { if (navIdx > 0) { navIdx--; currentPath = navHist[navIdx]; currentTagIds = []; refresh(); } }
-function navForward() { if (navIdx < navHist.length - 1) { navIdx++; currentPath = navHist[navIdx]; currentTagIds = []; refresh(); } }
+function navBack() {
+  // 回到上一个位置（navIdx 前移，指向上一站）
+  if (navIdx > 0) {
+    navIdx--;
+    currentPath = navHist[navIdx];
+    currentTagIds = [];
+    refresh();
+  }
+}
+function navForward() {
+  if (navIdx < navHist.length - 1) {
+    navIdx++;
+    currentPath = navHist[navIdx];
+    currentTagIds = [];
+    refresh();
+  }
+}
 function navUp() {
   if (!currentPath) return;
-  const parts = currentPath.split('/').filter(Boolean);
-  if (parts.length <= 1) navTo('');
-  else navTo(parts.slice(0, -1).join('/'));
+  const p = currentPath.replace(/[\\/]+$/, '');
+  if (!p) return;
+  // 已到盘符根（如 C: / C:/）或单段（无任何分隔符）→ 此电脑
+  if (/^[A-Za-z]:$/.test(p) || !/[\\/]/.test(p)) {
+    navTo('');
+    return;
+  }
+  // 去掉最后一段（兼容 \ 与 /），统一输出正斜杠
+  let upper = p.replace(/[\\/][^\\/]*$/, '').replace(/\\/g, '/');
+  if (/^[A-Za-z]:$/.test(upper)) upper += '/';  // C: → C:/
+  navTo(upper);
 }
 function openFolder(rel) { navTo(rel); }
 
@@ -256,7 +343,7 @@ function render() {
   const getVal = it => {
     if (sortKey === 'mtime') return (it.mtime || '');
     if (sortKey === 'type') return it.isFolder ? '' : (it.type || '');
-    return (it.name || '').toLowerCase();
+    return (displayName(it) || '').toLowerCase();
   };
   items.sort((a, b) => {
     if (a.isFolder !== b.isFolder) return a.isFolder ? -1 : 1;
@@ -330,11 +417,21 @@ function appendGridView(chunk, startIdx) {
         : `<div class="cell-icon">📁</div>`;
     } else if (it.type === 'image') {
       display = `<img class="cell-thumb" src="${relUrl(it.path)}" loading="lazy">`;
+    } else if (it.type === 'video') {
+      // 视频：尝试缩略图，失败回退图标（用 data-path 事件委托处理错误）
+      display = `<img class="cell-thumb video-thumb" data-path="${encodeURIComponent(it.path)}" src="/api/thumb?path=${encodeURIComponent(it.path)}&size=256" loading="lazy">`;
     } else {
       display = fileIconHtml(it.name, 'cell-icon-img', 'cell-icon', iconOf(it.type));
     }
     const meta = it.isFolder ? `${it.file_count} 项` : fmtSize(it.size);
-    div.innerHTML = `<div class="cell-content">${display}</div><div class="cell-name">${it.name}</div><div class="cell-meta">${meta}</div>`;
+    div.innerHTML = `<div class="cell-content">${display}</div><div class="cell-name">${nameHtml(it)}</div><div class="cell-meta">${meta}</div>`;
+    // 视频缩略图加载失败 → 回退图标
+    if (it.type === 'video') {
+      const vt = div.querySelector('.video-thumb');
+      if (vt) vt.onerror = () => {
+        vt.outerHTML = fileIconHtml(it.name, 'cell-icon-img', 'cell-icon', iconOf(it.type));
+      };
+    }
     div.dataset.key = it.path;
     div.onclick = e => onItemClick(e, idx, it.path, it.isFolder);
     div.ondblclick = e => { e.stopPropagation(); onItemDblClick(it.path, it.isFolder); };
@@ -369,7 +466,7 @@ function appendListView(chunk, startIdx) {
     else {
       iconHtml = fileIconHtml(it.name, 'list-icon-img', 'list-icon', iconOf(it.type));
     }
-    tr.innerHTML = `<td>${iconHtml} ${it.name}</td>
+    tr.innerHTML = `<td>${iconHtml} ${nameHtml(it)}</td>
       <td>${it.isFolder ? '文件夹' : it.type}</td>
       <td>${it.isFolder ? '-' : fmtSize(it.size)}</td>
       <td>${(it.mtime || '').replace('T', ' ').slice(0, 16)}</td>`;
@@ -479,6 +576,7 @@ function showCtx(e, path, kind, type) {
   if (kind === 'folder') html += '<div onclick="ctxAddQuick()">⭐ 添加到快速访问</div>';
   if (kind === 'file') html += '<div onclick="ctxOpen()">打开</div>';
   html += '<div onclick="ctxOpenFolder()">打开所在文件夹</div>';
+  if (!isMulti) html += '<div onclick="ctxSetAlias()">设置备注名 <span class="ctx-key">R</span></div>';
   html += '<div onclick="ctxRename()">重命名 <span class="ctx-key">F2</span></div>';
   html += '<div onclick="ctxDelete()">删除</div>';
   html += '<div onclick="ctxAttr()">属性 <span class="ctx-key">F</span></div>';
@@ -515,14 +613,14 @@ document.addEventListener('scroll', () => { hideContextMenus(); }, true);
   const sm = document.getElementById('scheme-ctx-menu');
   if (sm) sm.addEventListener('mouseleave', () => sm.classList.add('hidden'));
 })();
-// 当前操作目标：右键设的 ctxItem，否则取选中项（供键盘快捷键用）
+// 当前操作目标：优先当前选中项（键盘/通用），右键菜单场景由调用方显式传 ctxItem
 function currentCtx() {
-  if (ctxItem) return ctxItem;
   if (selected.size) {
     const k = selKeys()[0];
     const it = _allItems.find(x => x.path === k);
     return {path: k, kind: it && it.isFolder ? 'folder' : 'file'};
   }
+  if (ctxItem) return ctxItem;
   return null;
 }
 function ctxTag() {
@@ -568,6 +666,48 @@ async function ctxRename() {
   if (!d.ok) { alert('重命名失败: ' + (d.error || '')); return; }
   refresh(); loadFileTree();
 }
+// ---- 备注名设置浮窗 ----
+let aliasModalPath = null;
+function ctxSetAlias(optPath) {
+  hideContextMenus();
+  const c = optPath ? {path: optPath} : currentCtx();
+  if (!c) return;
+  aliasModalPath = c.path;
+  document.getElementById('alias-modal-target').textContent = '目标：' + (c.path.split(/[\\/]/).pop());
+  const input = document.getElementById('alias-modal-input');
+  input.value = '';
+  // 读取现有备注名
+  fetch('/api/alias/' + encPath(c.path))
+    .then(r => r.json())
+    .then(d => { if (d.ok && d.alias) input.value = d.alias; })
+    .catch(() => {});
+  modalShow(document.getElementById('alias-modal'));
+  setTimeout(() => input.focus(), 100);
+}
+async function saveAliasModal() {
+  const input = document.getElementById('alias-modal-input');
+  const alias = input.value.trim();
+  if (!aliasModalPath) return;
+  try {
+    const r = await fetch('/api/alias', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({path: aliasModalPath, alias})});
+    const d = await r.json();
+    if (!d.ok) { alert('保存失败: ' + (d.error || '')); return; }
+  } catch (e) { alert('保存失败: ' + e.message); return; }
+  closeAliasModal();
+  refresh();
+}
+async function clearAliasModal() {
+  if (!aliasModalPath) return;
+  try {
+    await fetch('/api/alias', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({path: aliasModalPath, alias: ''})});
+  } catch (e) { /* 忽略 */ }
+  closeAliasModal();
+  refresh();
+}
+function closeAliasModal() {
+  modalHide(document.getElementById('alias-modal'));
+  aliasModalPath = null;
+}
 function ctxOpenFolder() {
   hideContextMenus();
   if (!ctxItem) return;
@@ -603,12 +743,14 @@ async function doDelete(paths) {
 
 // ---- 属性 ----
 async function openAttrModal(path) {
-  const [attrRes, tagRes] = await Promise.all([
+  const [attrRes, tagRes, aliasRes] = await Promise.all([
     fetch('/api/library/attr?key=' + encodeURIComponent(path)),
     fetch('/api/folders/' + encPath(path) + '/tags'),
+    fetch('/api/alias/' + encPath(path)),
   ]);
   const d = await attrRes.json();
   const tags = (await tagRes.json()).tags || [];
+  const alias = (await aliasRes.json()).alias || '';
   const bodyEl = document.getElementById('attr-body');
   if (!d.ok) { bodyEl.innerHTML = '<p class="muted">' + (d.error || '无法读取') + '</p>'; }
   else {
@@ -634,6 +776,7 @@ async function openAttrModal(path) {
     }).join('');
     bodyEl.innerHTML = `
       <div class="attr-row"><span>名称</span><span>${path.split(/[\\/]/).pop()}</span></div>
+      <div class="attr-row"><span>备注名</span><span><span class="attr-alias" style="cursor:pointer;color:#0b57d0">${alias ? `<span class="alias-name" style="background:${aliasBg()}">${alias}</span>` : '（未设置，点击设置）'}</span></span></div>
       <div class="attr-row"><span>完整路径</span><span>${d.abs_path}</span></div>
       <div class="attr-row"><span>标签</span><span class="attr-tags">${capsules || '<span class="muted">（无标签）</span>'}</span></div>`;
     // 胶囊点击 → 直达标签筛选
@@ -642,6 +785,10 @@ async function openAttrModal(path) {
         closeAttrModal();
         selectTag(parseInt(el.dataset.tagid));
       };
+    });
+    // 备注名行点击 → 打开编辑浮窗
+    bodyEl.querySelectorAll('.attr-alias').forEach(el => {
+      el.onclick = () => { ctxSetAlias(path); };
     });
   }
   modalShow(document.getElementById('attr-modal'));
@@ -698,4 +845,7 @@ async function openMultiAttrModal(paths) {
     <hr class="attr-divider">
     ${rows}`;
 }
+
+// 初始化显示模式按钮文案（页面加载后执行）
+updateAliasModeBtn();
 

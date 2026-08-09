@@ -47,6 +47,7 @@
         </div>
       </div>
     </span>
+    <button class="mini alias-mode-btn" id="btn-alias-mode" onclick="toggleDisplayMode()" title="切换显示模式：文件名 / 备注名（快捷键 Q）"></button>
     <button class="mini" onclick="openSettingsModal()" title="设置">⚙️</button>
   </div>
 
@@ -56,6 +57,7 @@
   <div class="exp-left-main">
     <!-- Win11 文件树（左） -->
     <aside class="filetree-panel" id="filetree-panel">
+      <div class="filetree-resizer" id="filetree-resizer" title="拖动调整宽度"></div>
       <div class="tag-panel-head">📂 此电脑</div>
       <div id="quick-access" class="quick-access">
         <div class="quick-head">⭐ 快速访问</div>
@@ -140,8 +142,22 @@
   </div>
 </div>
 
+<!-- 备注名浮窗 -->
+<div id="alias-modal" class="modal hidden" onclick="if(event.target===this)closeAliasModal()">
+  <div class="modal-box">
+    <h3>设置备注名</h3>
+    <p class="muted" id="alias-modal-target"></p>
+    <input id="alias-modal-input" placeholder="备注名（仅西煲内显示，不修改真实文件名）" style="width:100%;box-sizing:border-box;margin:10px 0">
+    <div class="modal-actions">
+      <button class="ghost" onclick="closeAliasModal()">取消</button>
+      <button class="ghost" onclick="clearAliasModal()">清除备注名</button>
+      <button onclick="saveAliasModal()">确定</button>
+    </div>
+  </div>
+</div>
+
 <!-- 标签颜色弹窗 -->
-<div id="tag-color-modal" class="modal hidden" onclick="if(event.target===this)closeTagColor()">
+<div id="tag-color-modal" class="modal modal-top hidden" onclick="if(event.target===this)closeTagColor()">
   <div class="modal-box tag-color-box">
     <h3 id="tag-color-title">设置颜色</h3>
     <div class="color-palette" id="tag-color-palette"></div>
@@ -223,8 +239,23 @@
       </div>
 
       <div class="settings-block">
+        <h4>📝 备注名</h4>
+        <p class="muted">备注名是只在西煲内显示的名称，不修改真实文件名。选中文件后按 R 或右键「设置备注名」。</p>
+        <p class="muted" style="margin-top:6px">显示模式：工具栏按钮或按 Q 切换「以文件名为主 / 以备注名为主」。</p>
+        <div style="margin-top:10px">
+          <div class="muted" style="margin-bottom:4px">备注名底色：</div>
+          <button class="mini" onclick="openAliasColorPalette()" id="btn-alias-color">调色板</button>
+          <span class="alias-color-swatch" id="alias-color-preview"></span>
+        </div>
+        <div style="margin-top:14px">
+          <button class="danger" onclick="clearAllAliases()">清除所有备注名</button>
+          <span class="muted" style="margin-left:8px">将删除所有文件/文件夹的备注名，不可恢复</span>
+        </div>
+      </div>
+
+      <div class="settings-block">
         <h4>🏷 标签备份</h4>
-        <p class="muted">导出：将当前所有标签及文件关联保存为一个文件，方便备份或转移到其他电脑。</p>
+        <p class="muted">导出：将当前所有标签、备注名及文件关联保存为一个文件，方便备份或转移到其他电脑。</p>
         <div style="margin-top:6px">
           <button onclick="exportTags()">导出标签备份</button>
         </div>
@@ -235,7 +266,7 @@
         </div>
       </div>
 
-      <div class="version-info">西煲 <strong>v0.5.3 beta</strong></div>
+      <div class="version-info">西煲 <strong>v0.5.4 beta</strong></div>
       <div class="version-info author-line">作者 <a href="https://space.bilibili.com/128210" target="_blank" rel="noopener">@parukamun</a></div>
       <div class="version-info free-note">该软件永久免费，付费了说明你被骗了！</div>
       <div class="version-info" style="margin-top:10px">
@@ -269,6 +300,7 @@
       <p><strong>切换视图</strong>：顶部 ☰ 列表视图 / ▦ 网格视图按钮，右侧分段按钮可调节网格大小（50%–150%）。</p>
       <p><strong>排序</strong>：右上角「排序：」菜单选择按名称/修改日期/类型排列，并选择递增/递减。文件夹始终排在文件前面。</p>
       <p><strong>快速访问</strong>：右键文件夹 → 「⭐ 添加到快速访问」，常用目录固定在顶部书签。</p>
+      <p><strong>备注名</strong>：给文件/文件夹起一个只在本软件里显示的名字（不修改真实文件名）。右键「设置备注名」或按 R。工具栏「文件名 / 备注名」按钮或按 Q 切换显示模式。</p>
     </details>
 
     <details>
@@ -301,7 +333,7 @@
       <p>→ 进入选中文件夹 · ← / Backspace：返回上级</p>
       <p>Enter：打开 · 空格：快速预览（图片/视频/文本）</p>
       <p>F2：重命名 · Delete：删除</p>
-      <p>F：属性 · E：编辑标签/追加标签 · Shift+F：切换筛选模式</p>
+      <p>F：属性 · E：编辑标签/追加标签 · Shift+F：切换筛选模式 · Q：切换显示模式（文件名/备注名） · R：设置备注名</p>
       <p>Ctrl+A：全选 · Esc：关闭弹窗/菜单</p>
     </details>
 
@@ -326,6 +358,18 @@
   </div>
   <div class="help-doc">
     <details open>
+      <summary>v0.5.4</summary>
+      <p>· 新增：备注名——文件/文件夹可设置仅在西煲内显示的名称，不修改真实文件名</p>
+      <p>· 新增：显示模式切换——工具栏按钮或按 Q 切换「以文件名为主 / 以备注名为主」，备注名显示时带底色</p>
+      <p>· 新增：设置备注名——右键菜单「设置备注名」或按 R，属性弹窗也可点击设置</p>
+      <p>· 新增：备注名底色可在设置中调整（复用标签树调色板）</p>
+      <p>· 新增：搜索同时匹配文件名与备注名；排序按当前显示名</p>
+      <p>· 新增：备注名随标签备份导出/导入，移动/重命名时可跟随（受迁移开关控制）</p>
+      <p>· 新增：目录树深度缩进封顶（超过 8 层不再右移），深层级也能看清名字</p>
+      <p>· 新增：目录树宽度可拖拽调节，位置大小自动记忆</p>
+      <p>· 新增：视频缩略图——网格视图自动显示视频预览（内置解码，支持 MP4/MKV 等常见格式，生成后缓存）</p>
+    </details>
+    <details>
       <summary>v0.5.3</summary>
       <p>· 新增：卸载时检测西煲是否正在运行——先询问是否关闭，避免卸载失败</p>
       <p>· 新增：卸载完成后询问是否删除本地数据（标签/索引/备份，默认保留），可选彻底清除</p>
@@ -382,3 +426,4 @@
 <script src="{{ url_for('static', filename='explorer-schemes.js') }}?v=1"></script>
 <script src="{{ url_for('static', filename='settings.js') }}?v=2"></script>
 {% endblock %}
+

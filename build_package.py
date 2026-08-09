@@ -1,4 +1,4 @@
-"""西煲 - 完整打包脚本（PyInstaller onedir → 安装包）
+﻿"""西煲 - 完整打包脚本（PyInstaller onedir → 安装包）
 
 流程：
   1. PyInstaller 用 Xibao.spec 打包（launcher.py 入口，datas 含 src）
@@ -21,7 +21,7 @@ APP_DIR = os.path.join(DIST_DIR, "Xibao")
 ISCC = os.environ.get("ISCC") or os.path.join(ROOT, "inno", "ISCC.exe")
 
 APP_NAME = "Xibao"
-APP_VERSION = "0.5.3"
+APP_VERSION = "0.5.4"
 APP_PUBLISHER = "parukamun"
 APP_ID = "06DBF5F2-54AB-461E-A242-058B54BBD9CF"
 # 安装包图标：可用环境变量 XIBAO_ICON 覆盖，默认相对项目内 icon.ico
