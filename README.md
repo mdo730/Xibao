@@ -4,6 +4,10 @@
 
 A local file manager built around a hierarchical tag tree. Organize images, videos, docs, 3D models, and even whole folders with a single tag taxonomy — instead of folder paths.
 
+<p align="center">
+  <img src="docs/screenshot.png" alt="西煲截图" width="85%">
+</p>
+
 纯本地运行，不搬移用户文件，不联网不上传。数据存于 `%APPDATA%\Xibao\`，不依赖程序位置。
 
 - 🏷 无限级标签树 / Unlimited hierarchical tags (N levels)
