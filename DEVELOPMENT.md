@@ -59,9 +59,11 @@ pystray（托盘）+ psutil + Pillow + av（PyAV，视频缩略图解码）。�
 ## 当前版本
 
 - **v0.5.5 已发布**（标签数量显示；评分系统已移除）
-- **v0.6.0 重构进行中**：第 1 步模块解耦完成（app.py 按域拆 Blueprint，API 路径不变，前端零改动，57 单测全过，冒烟验证 9 个 API 全通）
-- 下一步见 ROADMAP.md（数据库容错 → 稳定文件标识 → 架构接口 → 收益项）
-- **工作原则**：实现前先检索 GitHub 找现成方案，能复用不重写
+- **v0.6.0 重构进行中**：
+  - ✅ 第 1 步 模块解耦：app.py 按域拆 Blueprint（routes/tags, files, search, settings），API 路径不变，前端零改动
+  - ✅ 第 2 步 数据库容错：`check_integrity`（PRAGMA integrity_check）+ `salvage_db`（逐表抢救）+ `snapshot_db`（Connection.backup 原子快照轮转）+ `ensure_healthy_db`（启动检测损坏自动恢复）；Store 默认路径启动时自动打快照到 `%APPDATA%\Xibao\data\snapshots\`
+- 下一步见 ROADMAP.md（第 3 步稳定文件标识 → 架构接口 → 收益项）
+- **工作原则**：实现前先检索 GitHub 找现成方案，能复用不重写；每完成一步 commit 留痕 + 更新接力文档
 
 ## v0.5.4 已实现（含从 v0.5.2/0.5.3 延续的改动）
 
