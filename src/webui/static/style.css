@@ -318,6 +318,10 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: #0b57d0
 .search-loading { padding: 40px; text-align: center; color: #666; font-size: 14px; }
 .explorer-body { flex: 1; overflow-y: auto; padding: 12px 14px; }
 
+/* ---- 设置 tooltip 提示图标 ---- */
+.help-tip { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%; background: #e0e0e0; color: #666; font-size: 11px; cursor: help; margin-left: 4px; user-select: none; flex-shrink: 0; }
+.help-tip:hover { background: #c8c8c8; }
+
 /* ---- 外部写入审核列表 ---- */
 .pending-badge { display: inline-block; min-width: 16px; height: 16px; line-height: 16px; border-radius: 8px; background: #e5533d; color: #fff; font-size: 11px; text-align: center; padding: 0 4px; margin-left: 2px; }
 .pending-badge.hidden { display: none; }
