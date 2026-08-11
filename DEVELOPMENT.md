@@ -73,8 +73,9 @@ pystray（托盘）+ psutil + Pillow + av（PyAV，视频缩略图解码）。�
   - ✅ 第 6 步 导航源抽象：`known_folders.py`（纯 ctypes 调 SHGetKnownFolderPath）+ `/api/filetree` 统一 Known Folders 与盘符；设置可开关/勾选系统文件夹；快速访问并入文件树
   - ✅ 第 8 步 开放外部标签写入 API：`src/webui/routes/external.py`（`POST /api/v1/tags/apply` + 安全区 + 审核队列）+ `pending_tag_applies` 表（v9）+ 前端「🕓 待审核」/「⚠️ 标签异常」统一缩略图视图（review.js）；参考 PhotoPrism FirstOrCreate 幂等
   - ✅ 连带增强：标签拖动排序持久化（sort_order v10 + move_tag + 祖先链同步 + 全量修复）、孤儿挂载检测/清理、设置「清理无效挂载」
+  - ✅ 第 9 步 标签筛选返回交互：`navHist/navIdx` 升级为 `{path, tagIds}` 视图快照（`_applyView`/`_pushView`），目录/标签筛选/清筛选共用返回栈，多标签每步进史、返回逐级回退；进目录=清空筛选
   - ⏸️ 第 3 步稳定文件标识、第 7 步层级重构：暂缓最后做（已存 ROADMAP + 提醒）
-  - 待做：第 9-11 步（标签筛选返回交互、英文界面、增量更新）
+  - 待做：第 10-11 步（英文界面、增量更新）
 - 下一步见 ROADMAP.md
 - **工作原则**：实现前先检索 GitHub 找现成方案，能复用不重写；每完成一步 commit 留痕 + 更新接力文档
 
