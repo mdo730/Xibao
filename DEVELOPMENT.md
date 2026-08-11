@@ -36,18 +36,32 @@ pystray（托盘）+ psutil + Pillow + av（PyAV，视频缩略图解码）。�
 ## 关键代码位置
 
 - `launcher.py`：端口/残留/托盘/代理逻辑（顶层 import pystray/psutil/PIL）
-- `src/webui/app.py`：Flask 应用 + 所有 API + `_seed_default_tags()` + `_resource_path()` + `/api/health` + `/api/help-seen` + `/api/meta/<key>` + `/api/alias` + `/api/thumb`
-- `src/memory/store.py`：SQLite + meta KV + 标签树/祖先链 + path_aliases（备注名）+ **schema 迁移机制**（`_MIGRATIONS` + 备份 + 回滚）
+- `src/webui/app.py`：瘦身版——页面路由 + Blueprint 注册 + `_seed_default_tags()` + `_auto_backup()` + `_resource_path()` + 启动
+- `src/webui/routes/`：**API 按域拆分（Blueprint，v0.6.0 重构第 1 步）**
+  - `tags.py`：标签树 + 文件夹标签关联 + 备注名（alias）
+  - `files.py`：目录浏览 + 文件操作 + 文件树 + 图片/缩略图服务
+  - `search.py`：Everything/本地索引分层搜索 + 索引构建
+  - `settings.py`：health/help-seen/meta KV + 标签导入导出
+  - `__init__.py`：`ALL_BLUEPRINTS` 统一注册
+  - 注意：routes 内相对导入是三级 `from ...memory` / `from ...images`（routes 在 webui 下）
+- `src/memory/store.py`：SQLite + meta KV + 标签树/祖先链 + path_aliases（备注名）+ **schema 迁移机制**（`_MIGRATIONS` + 备份 + 回滚）+ `tag_counts()`（标签数量）
 - `src/images/thumbnail.py`：视频缩略图（PyAV 提取帧 + 缓存 `%LOCALAPPDATA%\Xibao\thumbnails` + 后台生成队列）
 - `src/images/library.py`：文件操作（rename/move/delete 均处理标签关联，迁移开关控制）
 - `src/webui/static/explorer-tags.js`：打标签弹窗（单选编辑=覆盖、多选追加=并集）
-- `src/webui/static/explorer-tags-jstree.js`：标签树 jsTree 交互（筛选链去冗余、chips 颜色/位置/尺寸）
+- `src/webui/static/explorer-tags-jstree.js`：标签树 jsTree 交互（筛选链去冗余、chips 颜色/位置/尺寸、标签数量显示）
 - `src/webui/static/explorer-core.js`：右键菜单、属性、导航历史（navTo/navBack/navUp 统一正斜杠）、备注名显示工具（nameHtml/displayName/aliasMode）、currentCtx（优先选中项）
 - `src/webui/static/explorer-tree.js`：文件树 + 宽度拖拽（localStorage）+ 缩进封顶
 - `src/webui/static/explorer-keys.js`：快捷键（含 Q 切显示模式、R 设置备注名）
 - `src/webui/static/settings.js`：设置弹窗 + 帮助/更新日志浮窗 + 备注名底色调色板
 - `src/webui/templates/images.html`：主界面 + 设置弹窗 + 帮助/更新日志浮窗
-- `tests/`：pytest（test_store / test_library / test_migration）
+- `tests/`：pytest（test_store / test_library / test_migration，57 个用例）
+
+## 当前版本
+
+- **v0.5.5 已发布**（标签数量显示；评分系统已移除）
+- **v0.6.0 重构进行中**：第 1 步模块解耦完成（app.py 按域拆 Blueprint，API 路径不变，前端零改动，57 单测全过，冒烟验证 9 个 API 全通）
+- 下一步见 ROADMAP.md（数据库容错 → 稳定文件标识 → 架构接口 → 收益项）
+- **工作原则**：实现前先检索 GitHub 找现成方案，能复用不重写
 
 ## v0.5.4 已实现（含从 v0.5.2/0.5.3 延续的改动）
 
