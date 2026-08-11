@@ -132,11 +132,12 @@ function escHtml(s) {
 
 // 按文件路径审核（该文件的所有待审核标签一起处理）
 async function reviewGroup(path, accept) {
-  // 从后端拿该路径对应的 pending id 列表
+  // 从后端拿该路径对应的全部 pending id
   const r = await fetch('/api/v1/tags/pending');
   const d = await r.json();
   if (!d.ok) { alert('加载失败'); return; }
-  const ids = (d.items || []).filter(x => x.path === path).map(x => x.id);
+  const g = (d.items || []).find(x => x.path === path);
+  const ids = g ? (g.ids || [g.id]) : [];
   if (!ids.length) { refreshReviewView(); return; }
   try {
     const rr = await fetch('/api/v1/tags/review', {method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -152,7 +153,9 @@ async function reviewAll(accept) {
   const r = await fetch('/api/v1/tags/pending');
   const d = await r.json();
   if (!d.ok) return;
-  const ids = (d.items || []).map(x => x.id);
+  // 收集所有文件的全部 pending id
+  const ids = [];
+  (d.items || []).forEach(x => { (x.ids || [x.id]).forEach(i => ids.push(i)); });
   if (!ids.length) { refreshReviewView(); return; }
   try {
     const rr = await fetch('/api/v1/tags/review', {method: 'POST', headers: {'Content-Type': 'application/json'},

@@ -100,6 +100,31 @@ def test_review_clears_duplicate_rows(store):
     assert any(t["name"] == "重复标签" for t in tags)
 
 
+def test_review_multi_tag_file_clears_all(store):
+    """同一文件挂了多个标签时，审核应清掉该文件全部 pending，不留文件残留。"""
+    store.add_pending_apply("D:/a.png", "标签1", None, "s1")
+    store.add_pending_apply("D:/a.png", "标签2", None, "s1")
+    store.add_pending_apply("D:/a.png", "标签3", "父级", "s1")
+    store.add_pending_apply("D:/b.png", "独立标签", None, "s1")
+    items = store.list_pending_applies("pending")
+    # 按文件分组后 a.png 有 3 条（3 个标签），b.png 1 条
+    groups = {}
+    for it in items:
+        groups.setdefault(it["folder_path"], []).append(it["id"])
+    assert len(groups["D:/a.png"]) == 3
+    assert len(groups["D:/b.png"]) == 1
+    # 只审核 a.png 的全部 ids
+    res = store.review_pending(groups["D:/a.png"], True)
+    assert res["accepted"] == 3
+    assert store.pending_count() == 1          # 只剩 b.png
+    # a.png 的 3 个标签全部写入
+    tags = store.tags_for_folder("D:/a.png")
+    names = {t["name"] for t in tags}
+    assert {"标签1", "标签2", "标签3"} <= names
+    # b.png 仍未处理
+    assert store.pending_count() == 1
+
+
 def test_review_mixed_reject_accept(store):
     store.add_pending_apply("D:/a.png", "好标签", None, "s1")
     store.add_pending_apply("D:/b.png", "坏标签", None, "s1")

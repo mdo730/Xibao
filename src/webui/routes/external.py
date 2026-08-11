@@ -180,9 +180,10 @@ def api_pending():
         groups = {}
         for it in items:
             g = groups.setdefault(it["folder_path"],
-                                  {"path": it["folder_path"], "tags": [], "id": it["id"]})
+                                  {"path": it["folder_path"], "tags": [], "ids": []})
             g["tags"].append({"name": it["tag_name"], "parent": it["parent_name"],
                               "source": it["source"]})
+            g["ids"].append(it["id"])
         # 附文件类型/是否存在于磁盘
         for g in groups.values():
             p = g["path"]
