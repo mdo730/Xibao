@@ -318,15 +318,9 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: #0b57d0
 .search-loading { padding: 40px; text-align: center; color: #666; font-size: 14px; }
 .explorer-body { flex: 1; overflow-y: auto; padding: 12px 14px; }
 
-/* ---- 快速访问 ---- */
-.quick-access { border-bottom: 1px solid #e5e5e5; max-height: 33%; overflow-y: auto; flex-shrink: 0; }
-.quick-head { font-size: 11px; color: #8a8a8a; padding: 8px 12px 4px; }
-.quick-list { padding-bottom: 4px; }
-.quick-item { display: flex; align-items: center; gap: 6px; padding: 4px 12px; font-size: 12px; cursor: pointer; border-radius: 5px; white-space: nowrap; overflow: hidden; }
-.quick-item:hover { background: #f2f2f2; }
-.quick-icon { font-size: 14px; flex-shrink: 0; }
-.quick-name { overflow: hidden; text-overflow: ellipsis; }
-.quick-empty { padding: 6px 12px; font-size: 11px; color: #aaa; }
+/* ---- 文件树分隔线 & 快速访问条目 ---- */
+.tree-sep { border-top: 1px solid #e2e2e2; margin: 6px 10px; }
+.quick-tree-item .tree-label { color: #7a5c2e; font-weight: 500; }
 
 /* ---- QuickLook 预览 ---- */
 .quicklook-modal { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; z-index: 500; }

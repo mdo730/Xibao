@@ -7,6 +7,7 @@ function openSettingsModal() {
   loadMigrateSetting();
   renderChipsSettingUI();
   updateAliasColorPreview();
+  renderKnownFoldersSettingUI();
 }
 function closeSettingsModal() {
   modalHide(document.getElementById('settings-modal'));
@@ -65,6 +66,60 @@ function renderChipsSettingUI() {
     const el = document.getElementById(id);
     if (el) el.classList.toggle('active', size === val);
   });
+}
+
+// ---- 文件树：系统文件夹开关 + 保留项（localStorage） ----
+const KNOWN_KEY = 'xibao_known_folders';
+const KNOWN_LABELS = {Desktop: '桌面', Downloads: '下载', Pictures: '图片', Videos: '视频',
+  Documents: '文档', Music: '音乐', ProgramData: '程序数据', Public: '公共'};
+function knownFoldersSetting() {
+  try {
+    const v = JSON.parse(localStorage.getItem(KNOWN_KEY) || 'null');
+    if (v) return v;
+  } catch (e) { /* 忽略 */ }
+  return {on: true, list: []};
+}
+function saveKnownFoldersSetting() {
+  const cb = document.getElementById('set-known-folders');
+  const on = !!(cb && cb.checked);
+  const checks = document.querySelectorAll('#set-known-folders-list input[type=checkbox]');
+  const list = [];
+  checks.forEach(c => { if (c.checked) list.push(c.dataset.name); });
+  localStorage.setItem(KNOWN_KEY, JSON.stringify({on, list}));
+  if (typeof loadFileTree === 'function') loadFileTree();
+}
+async function renderKnownFoldersSettingUI() {
+  const wrap = document.getElementById('set-known-folders-list');
+  if (!wrap) return;
+  const s = knownFoldersSetting();
+  const cb = document.getElementById('set-known-folders');
+  if (cb) cb.checked = s.on;
+  // 从后端拿真实存在的 Known Folders
+  try {
+    const r = await fetch('/api/filetree');
+    const d = await r.json();
+    if (!d.ok) throw new Error('bad');
+    const known = d.tree.filter(n => n.is_known);
+    const sorted = Object.keys(KNOWN_LABELS)
+      .map(name => known.find(n => n.name === name))
+      .filter(Boolean);
+    wrap.innerHTML = '';
+    sorted.forEach(n => {
+      const label = document.createElement('label');
+      label.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:12px;padding:3px 0';
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.dataset.name = n.name;
+      input.checked = !(s.list && s.list.length) || s.list.includes(n.name);
+      input.style.width = 'auto';
+      input.onchange = saveKnownFoldersSetting;
+      label.appendChild(input);
+      label.appendChild(document.createTextNode((KNOWN_LABELS[n.name] || n.name) + '  ' + n.path.replace(/\\/g, '\\')));
+      wrap.appendChild(label);
+    });
+  } catch (e) {
+    wrap.innerHTML = '<div class="muted">无法加载系统文件夹列表</div>';
+  }
 }
 
 // ---- 帮助浮窗（可拖动、可关闭） ----

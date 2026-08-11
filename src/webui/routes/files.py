@@ -220,8 +220,8 @@ def api_filetree():
     for name, p in known_folders.known_folder_entries().items():
         if name not in icon_map or name == "Profile":
             continue
-        tree.append({"key": p, "name": f"{icon_map.get(name, '📁')} {name}", "path": p,
-                     "is_drive": False, "is_known": True, "children": []})
+        tree.append({"key": p, "name": name, "display": f"{icon_map.get(name, '📁')} {name}",
+                     "path": p, "is_drive": False, "is_known": True, "children": []})
     # 盘符
     drives = lib._drive_list()
     for d in drives:

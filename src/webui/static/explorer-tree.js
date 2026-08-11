@@ -1,4 +1,4 @@
-// ---- 快速访问（localStorage 持久化） ----
+// ---- 快速访问（localStorage 持久化，渲染进文件树） ----
 const QUICK_KEY = 'xibao_quick_access';
 function loadQuickAccess() {
   try { return JSON.parse(localStorage.getItem(QUICK_KEY) || '[]'); }
@@ -7,34 +7,6 @@ function loadQuickAccess() {
 function saveQuickAccess(list) {
   try { localStorage.setItem(QUICK_KEY, JSON.stringify(list)); } catch (e) { /* 忽略 */ }
 }
-function renderQuickAccess() {
-  const listEl = document.getElementById('quick-list');
-  if (!listEl) return;
-  const list = loadQuickAccess();
-  listEl.innerHTML = '';
-  if (!list.length) {
-    listEl.innerHTML = '<div class="quick-empty">右键文件夹 → 添加到快速访问</div>';
-    return;
-  }
-  for (const it of list) {
-    const div = document.createElement('div');
-    div.className = 'quick-item';
-    div.title = it.path;
-    div.innerHTML = `<span class="quick-icon">📁</span><span class="quick-name">${it.name}</span>`;
-    div.onclick = () => openFolder(it.path);
-    div.oncontextmenu = e => {
-      e.preventDefault(); e.stopPropagation();
-      quickCtxItem = it;
-      lastMouseX = e.clientX; lastMouseY = e.clientY;
-      const menu = document.getElementById('tag-ctx-menu');
-      menu.innerHTML = '<div onclick="quickRemove()">从快速访问移除</div>';
-      menu.classList.remove('hidden');
-      menu.style.left = Math.min(e.clientX, window.innerWidth - 140) + 'px';
-      menu.style.top = Math.min(e.clientY, window.innerHeight - 130) + 'px';
-    };
-    listEl.appendChild(div);
-  }
-}
 let quickCtxItem = null;
 function addToQuickAccess(path) {
   const list = loadQuickAccess();
@@ -42,14 +14,13 @@ function addToQuickAccess(path) {
   if (list.some(x => x.path === norm)) return;
   list.unshift({path: norm, name: norm.split('/').filter(Boolean).pop() || norm});
   saveQuickAccess(list);
-  renderQuickAccess();
+  loadFileTree();
 }
 function quickRemove() {
   if (!quickCtxItem) return;
   saveQuickAccess(loadQuickAccess().filter(x => x.path !== quickCtxItem.path));
-  renderQuickAccess();
+  loadFileTree();
 }
-renderQuickAccess();
 
 // ---- 文件树宽度可拖拽（存 localStorage） ----
 const FTREE_WIDTH_KEY = 'xibao_filetree_width';
@@ -104,13 +75,92 @@ async function handleDropOnTree(e, destPath) {
   refresh(); loadFileTree();
 }
 
-// ---- 文件树（惰性加载）----
+// ---- 文件树（惰性加载；Known Folders 按设置过滤 + 快速访问 + 分隔线 + 盘符）----
 async function loadFileTree() {
   const r = await fetch('/api/filetree');
   const d = await r.json();
   if (!d.ok) return;
   fileTreeEl.innerHTML = '';
-  for (const node of d.tree) await renderTreeItem(node, 0);
+  const setting = (typeof knownFoldersSetting === 'function') ? knownFoldersSetting() : {on: true, list: []};
+  const knownNodes = d.tree.filter(n => n.is_known);
+  const driveNodes = d.tree.filter(n => !n.is_known);
+  // 系统文件夹（按设置过滤）
+  if (setting.on) {
+    const shown = setting.list && setting.list.length
+      ? knownNodes.filter(n => setting.list.includes(n.name))
+      : knownNodes;
+    for (const node of shown) await renderTreeItem(node, 0);
+  }
+  // 快速访问（在系统文件夹下方）
+  const quick = loadQuickAccess();
+  if (quick.length) {
+    for (const it of quick) await renderQuickTreeItem(it, 0);
+  }
+  // 有上方内容则加分隔线
+  const hasTop = (setting.on && (setting.list && setting.list.length
+      ? knownNodes.some(n => setting.list.includes(n.name)) : knownNodes.length)) || quick.length;
+  if (hasTop) {
+    const sep = document.createElement('div');
+    sep.className = 'tree-sep';
+    fileTreeEl.appendChild(sep);
+  }
+  // 盘符
+  for (const node of driveNodes) await renderTreeItem(node, 0);
+}
+
+// 快速访问条目渲染为树节点（可点击进入，右键移除）
+async function renderQuickTreeItem(it, depth) {
+  const div = document.createElement('div');
+  div.className = 'tree-item quick-tree-item';
+  div.dataset.path = it.path;
+  div.dataset.expanded = '0';
+  div.dataset.loaded = '0';
+  const arrowSpan = document.createElement('span');
+  arrowSpan.className = 'tree-arrow';
+  arrowSpan.textContent = '▶';
+  div.appendChild(arrowSpan);
+  const label = document.createElement('span');
+  label.className = 'tree-label';
+  label.textContent = '⭐ ' + it.name;
+  div.appendChild(label);
+  div.style.paddingLeft = '8px';
+  div.title = it.path;
+
+  const childrenWrap = document.createElement('div');
+  childrenWrap.className = 'tree-children';
+  const childrenInner = document.createElement('div');
+  childrenInner.className = 'tree-children-inner';
+  childrenWrap.appendChild(childrenInner);
+  div.dataset.childrenWrap = '';
+
+  div.onclick = e => {
+    e.stopPropagation();
+    openFolder(it.path);
+  };
+  div.ondragover = e => { e.preventDefault(); div.classList.add('drop-target'); };
+  div.ondragleave = () => div.classList.remove('drop-target');
+  div.ondrop = e => {
+    e.preventDefault();
+    div.classList.remove('drop-target');
+    handleDropOnTree(e, it.path);
+  };
+  div.oncontextmenu = e => {
+    e.preventDefault(); e.stopPropagation();
+    quickCtxItem = it;
+    lastMouseX = e.clientX; lastMouseY = e.clientY;
+    const menu = document.getElementById('tag-ctx-menu');
+    menu.innerHTML = '<div onclick="quickRemove()">从快速访问移除</div>';
+    menu.classList.remove('hidden');
+    menu.style.left = Math.min(e.clientX, window.innerWidth - 140) + 'px';
+    menu.style.top = Math.min(e.clientY, window.innerHeight - 130) + 'px';
+  };
+  arrowSpan.onclick = async e => {
+    e.stopPropagation();
+    if (div.dataset.expanded === '1') collapseTreeItem(div);
+    else await expandTreeItem(div, depth + 1);
+  };
+  fileTreeEl.appendChild(div);
+  fileTreeEl.appendChild(childrenWrap);
 }
 
 async function renderTreeItem(node, depth, parentEl) {
@@ -126,7 +176,7 @@ async function renderTreeItem(node, depth, parentEl) {
   div.appendChild(arrowSpan);
   const label = document.createElement('span');
   label.className = 'tree-label';
-  label.textContent = node.name;
+  label.textContent = node.display || node.name;
   div.appendChild(label);
   div.style.paddingLeft = (Math.min(depth, 8) * 14 + 8) + 'px';
 

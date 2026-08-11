@@ -58,12 +58,7 @@
     <!-- Win11 文件树（左） -->
     <aside class="filetree-panel" id="filetree-panel">
       <div class="filetree-resizer" id="filetree-resizer" title="拖动调整宽度"></div>
-      <div class="tag-panel-head">📂 此电脑</div>
-      <div id="quick-access" class="quick-access">
-        <div class="quick-head">⭐ 快速访问</div>
-        <div id="quick-list" class="quick-list"></div>
-      </div>
-      <div class="tag-panel-head">🗂 目录</div>
+      <div class="tag-panel-head">📂 文件树</div>
       <div id="file-tree" class="file-tree"></div>
     </aside>
 
@@ -224,6 +219,15 @@
       </div>
 
       <div class="settings-block">
+        <h4>🗂 文件树</h4>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:6px">
+          <input type="checkbox" id="set-known-folders" style="width:auto" onchange="saveKnownFoldersSetting()"> 显示系统文件夹（桌面/下载/图片/视频/文档/音乐/公共等）
+        </label>
+        <div id="set-known-folders-list" style="margin-top:10px"></div>
+        <p class="muted" style="margin-top:8px">勾选要在文件树顶部显示的系统文件夹；不勾总开关则全部隐藏，只显示磁盘。</p>
+      </div>
+
+      <div class="settings-block">
         <h4>💊 筛选胶囊</h4>
         <div style="margin-top:10px">
           <div class="muted" style="margin-bottom:4px">显示位置：</div>
@@ -299,7 +303,7 @@
       <p><strong>浏览文件</strong>：左侧是「此电脑」目录树，点文件夹进入；中间是文件列表，双击文件用系统默认程序打开，双击文件夹进入。</p>
       <p><strong>切换视图</strong>：顶部 ☰ 列表视图 / ▦ 网格视图按钮，右侧分段按钮可调节网格大小（50%–150%）。</p>
       <p><strong>排序</strong>：右上角「排序：」菜单选择按名称/修改日期/类型排列，并选择递增/递减。文件夹始终排在文件前面。</p>
-      <p><strong>快速访问</strong>：右键文件夹 → 「⭐ 添加到快速访问」，常用目录固定在顶部书签。</p>
+      <p><strong>快速访问</strong>：右键文件夹 → 「⭐ 添加到快速访问」，常用目录固定在文件树顶部（系统文件夹下方）。可在设置中隐藏系统文件夹。</p>
       <p><strong>备注名</strong>：给文件/文件夹起一个只在本软件里显示的名字（不修改真实文件名）。右键「设置备注名」或按 R。工具栏「文件名 / 备注名」按钮或按 Q 切换显示模式。</p>
     </details>
 
