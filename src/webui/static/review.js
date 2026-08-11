@@ -259,8 +259,7 @@ async function clearOrphans() {
     const d = await r.json();
     if (!d.ok) { alert('清理失败: ' + (d.error || '')); return; }
     alert('已清理 ' + d.cleared + ' 个孤儿挂载');
-    if (taskViewMode === 'orphan') enterOrphanView(taskViewSeq);
-    else refreshOrphanBadge();
+    refreshReviewView();   // 内部检测：还有孤儿则刷新视图，清空则自动退出
     if (typeof loadTags === 'function') loadTags();
     if (typeof refresh === 'function') refresh();
   } catch (e) { alert('清理失败: ' + e.message); }
@@ -282,6 +281,11 @@ async function refreshReviewView() {
     if (seq !== taskViewSeq) return;
     if (d.ok) pendingGroups = _orphanToGroups(d.items);
     refreshOrphanBadge();
+  }
+  // 处理完后队列已空 → 自动退出任务视图，回到进入前的位置
+  if (taskViewMode && !pendingGroups.length) {
+    exitTaskView();
+    return;
   }
   if (taskViewMode) {
     renderTaskBanner();
