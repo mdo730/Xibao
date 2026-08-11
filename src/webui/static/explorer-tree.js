@@ -318,37 +318,6 @@ function openTagColor() {
   updateColorPreview();
   modalShow(document.getElementById('tag-color-modal'));
 }
-function updateColorPreview() {
-  const p = document.getElementById('tag-color-preview');
-  p.style.background = selColor;
-  p.textContent = selColor;
-}
-async function saveTagColor() {
-  if (typeof schemeColorTarget !== 'undefined' && schemeColorTarget >= 0) {
-    if (typeof loadSchemes === 'function') {
-      const list = loadSchemes();
-      if (list[schemeColorTarget]) {
-        list[schemeColorTarget].color = selColor;
-        saveSchemes(list);
-      }
-    }
-    schemeColorTarget = -1;
-    closeTagColor();
-    if (typeof renderSchemes === 'function') renderSchemes();
-    return;
-  }
-  const r = await fetch('/api/tags/' + tagCtxItem.id + '/color', {
-    method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({color: selColor}),
-  });
-  const d = await r.json();
-  if (!d.ok) alert('设置颜色失败: ' + (d.error || ''));
-  closeTagColor();
-  loadTags();
-}
-function closeTagColor() {
-  modalHide(document.getElementById('tag-color-modal'));
-}
 
 function tagDelete() {
   if (!tagCtxItem) return;

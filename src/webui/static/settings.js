@@ -386,9 +386,26 @@ function updateColorPreview() {
   if (!p) return;
   const sel = document.querySelector('#tag-color-palette .color-swatch.sel');
   p.style.background = sel ? sel.dataset.color : aliasBg();
+  p.textContent = sel ? sel.dataset.color : '';
 }
 function saveTagColor() {
   const sel = document.querySelector('#tag-color-palette .color-swatch.sel');
+  // 方案颜色（筛选方案调色板，schemeColorTarget >= 0 时）
+  if (typeof schemeColorTarget !== 'undefined' && schemeColorTarget >= 0) {
+    if (sel) {
+      if (typeof loadSchemes === 'function') {
+        const list = loadSchemes();
+        if (list[schemeColorTarget]) {
+          list[schemeColorTarget].color = sel.dataset.color || selColor;
+          saveSchemes(list);
+        }
+      }
+      if (typeof renderSchemes === 'function') renderSchemes();
+    }
+    schemeColorTarget = -1;
+    modalHide(document.getElementById('tag-color-modal'));
+    return;
+  }
   if (_aliasColorMode) {
     if (sel) setAliasBg(sel.dataset.color);
     _aliasColorMode = false;
