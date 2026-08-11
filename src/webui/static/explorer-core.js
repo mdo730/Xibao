@@ -577,6 +577,7 @@ function showCtx(e, path, kind, type) {
   if (kind === 'file') html += '<div onclick="ctxOpen()">打开</div>';
   html += '<div onclick="ctxOpenFolder()">打开所在文件夹</div>';
   if (!isMulti) html += '<div onclick="ctxSetAlias()">设置备注名 <span class="ctx-key">R</span></div>';
+  html += '<div onclick="ctxCopyPath()">复制路径</div>';
   html += '<div onclick="ctxRename()">重命名 <span class="ctx-key">F2</span></div>';
   html += '<div onclick="ctxDelete()">删除</div>';
   html += '<div onclick="ctxAttr()">属性 <span class="ctx-key">F</span></div>';
@@ -680,6 +681,17 @@ async function ctxClearTags() {
     } catch (e) { /* 单条失败继续 */ }
   }
   loadTags(); refresh();
+}
+function ctxCopyPath() {
+  hideContextMenus();
+  const c = currentCtx();
+  if (!c) return;
+  const text = c.path.replace(/\//g, '\\');
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).catch(() => prompt('复制失败，请手动复制：', text));
+  } else {
+    prompt('复制路径：', text);
+  }
 }
 function ctxOpen() {
   hideContextMenus(); if (ctxItem && ctxItem.kind === 'file') openFile(ctxItem.path); }

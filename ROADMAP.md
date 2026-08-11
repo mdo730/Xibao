@@ -88,9 +88,15 @@
    - **风险**：数据模型迁移，改错影响现有用户标签；实施前先做第 1 步 DDL 增量提交隔离风险
 
 ### 第二梯队：架构接口（随解耦定义，供未来功能接入）
-4. ✅ **右键外部工具集成层**（已完成）：`src/images/tools.py` 探测已装软件（7-Zip/WinRAR/Locale Emulator/Everything，纯 winreg）+ `/api/tools`（动作清单）+ `/api/tools/run`（后台执行）+ 前端右键菜单动态加载；参考 patool/ConEmu/LE 官方实现；74 单测
+4. ✅ **西煲内置右键菜单 + 外部工具集成**（已完成核心）：`src/images/tools.py` 探测已装软件（7-Zip/WinRAR/Locale Emulator/Everything，纯 winreg）+ `/api/tools`（动作清单）+ `/api/tools/run`（后台执行）+ 前端右键菜单动态加载；参考 patool/ConEmu/LE 官方实现；74 单测
+   - **接口预留**：`tools.py` 的 `detect_tools()` 返回 `ExternalTool` 列表（key/label/exe/build_cmds），新增工具只需加探测+命令构造；前端 `loadCtxTools` 动态渲染，无需改菜单结构
+   - 方向确认：内置菜单聚焦"文件组织高频操作"（标签/备注/评分/解压/LE 运行），不照搬 Windows 全家桶
 5. **缩略图可插拔后端**：优先系统 COM 缩略图（覆盖广、与原生一致），失败回退 PyAV——当前 PyAV 是妥协，重构后双后端覆盖 PSD/3D 等格式
 6. **导航源抽象**：盘符 / Known Folders / 标签视图统一为导航接口——为虚拟导航预留
+
+### 未来展望
+- **仿原生右键菜单模式**（设置切换"内置/仿原生"）：贴近 Windows 原生菜单结构（打开/剪切/复制/粘贴/新建/复制路径/发送到/属性等分组），但保留西煲独有功能（标签/备注/评分/平铺）
+  - **接口预留**：右键菜单渲染集中在 `showCtx` + `loadCtxTools`，未来加"仿原生"模式只需新增一套菜单渲染函数 + 设置项切换
 
 ### 第三梯队：重构收益项
 7. **层级展开重构**：不物化祖先链，查询期 BFS 展开 + flat_dict 缓存（借鉴 etiquette）——治本"属性父级冗余/叶子升父级幽灵标签"
