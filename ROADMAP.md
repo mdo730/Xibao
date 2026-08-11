@@ -72,7 +72,18 @@
 ### 第一梯队：地基（必须最先，后续全依赖）
 1. ✅ **模块解耦**（已完成）：app.py 按域拆分 Blueprint（routes/tags, files, search, settings），API 路径不变，前端零改动，57 单测全过
 2. ✅ **数据库容错**（已完成）：`PRAGMA integrity_check` 检测 + 纯 Python 逐表 salvage 修复 + `Connection.backup()` 原子快照轮转；Store 启动自动检测损坏并恢复；66 单测全过
-3. ⬜ **稳定文件标识**（下一步）：NTFS 文件 ID / volume+file index 作标签锚点，路径只是当前地址——根治"文件移动/重命名后标签丢失"，数据锚点变更影响所有路径级功能（标签/备注名/剪贴板）
+3. ⬜ **稳定文件标识**（已调研完成，方案定案，待实现）：
+   - **结论**：`os.stat().st_ino + st_dev` = NTFS 文件 ID（Python 3.12+ 128 位，标准库零依赖），无需 pywin32/自写 ctypes
+   - **方案**："ID 优先 + 路径兜底"：打标/写备注时同时记 `file_id`；路径失效用 ID 反查
+   - **反查三层**：`file_index.last_path` 缓存（必须，轻量）→ `OpenFileById` ctypes 反查（可选，需提权/管理员，st_ino 字节序需自检）→ 手动重绑定 UI（必须，跨卷移动兜底）
+   - **分步实施**（约 3-5 天，分 commit 留痕）：
+     1. DDL：folder_tags/path_aliases 加 file_id 列 + file_index 表（file_id/last_path/fs_kind/id_trusted）+ 写入带 ID（0.5 天，纯增量可逆）
+     2. 一次性回填（后台分批，按卷跳过不可达，0.5-1 天）
+     3. `resolve_path`（ID 优先+路径兜底+重建策略开关）+ 孤儿列表/手动重绑定（1-2 天）
+     4. OpenFileById 反查 + selftest（可选，1 天，自检不过就关掉退回 last_path）
+     5. watcher 实时跨卷移动（可选，未来）
+   - **关键决策**：删除重建→file_id 变，默认不继承旧标签（安全）；跨卷移动→st_dev 变 ID 失效，需手动重绑定；FAT32/exFAT/SMB→`id_trusted=0` 纯路径模式
+   - **风险**：数据模型迁移，改错影响现有用户标签；实施前先做第 1 步 DDL 增量提交隔离风险
 
 ### 第二梯队：架构接口（随解耦定义，供未来功能接入）
 4. **右键外部工具集成层**：启动检测已装软件（7-Zip/WinRAR/Locale Emulator 等），右键菜单动态加入对应动作（调其 CLI）——用户"脱离原生资源管理器"的关键，需在模块化时定义接口
