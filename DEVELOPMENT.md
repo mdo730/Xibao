@@ -64,8 +64,9 @@ pystray（托盘）+ psutil + Pillow + av（PyAV，视频缩略图解码）。�
   - ✅ 第 2 步 数据库容错：`check_integrity`（PRAGMA integrity_check）+ `salvage_db`（逐表抢救）+ `snapshot_db`（Connection.backup 原子快照轮转）+ `ensure_healthy_db`（启动检测损坏自动恢复）；Store 默认路径启动时自动打快照到 `%APPDATA%\Xibao\data\snapshots\`
   - ✅ 第 5 步 缩略图可插拔后端：`shell_thumbnail.py`（系统 COM 缩略图，纯 ctypes 参考 yasb，修正版 GUID）+ `thumbnail.py` 多后端（COM 优先 + PyAV 回退）；网格视图 doc/pdf/archive/code 尝试系统缩略图；系统图标（exe 等按完整路径缓存，每个程序图标独立）
   - ✅ 第 6 步 导航源抽象：`known_folders.py`（纯 ctypes 调 SHGetKnownFolderPath 取系统 Known Folders，自动处理 OneDrive 重定向）+ `/api/filetree` 统一 Known Folders 与盘符为顶层导航源
+  - ✅ 第 8 步 开放外部标签写入 API：`src/webui/routes/external.py`（`POST /api/v1/tags/apply` 批量打标 + 安全区路径白名单 + 审核队列）+ `pending_tag_applies` 表（v9）+ 前端「🕓 待审核」待办入口（review.js）；参考 PhotoPrism FirstOrCreate 幂等
   - ⏸️ 第 3 步稳定文件标识、第 7 步层级重构：暂缓最后做（已存 ROADMAP + 提醒）
-  - 待做：第 8-11 步
+  - 待做：第 9-11 步
 - 下一步见 ROADMAP.md
 - **工作原则**：实现前先检索 GitHub 找现成方案，能复用不重写；每完成一步 commit 留痕 + 更新接力文档
 

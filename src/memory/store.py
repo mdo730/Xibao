@@ -10,14 +10,25 @@ import sqlite3
 
 from ..common import appdata_dir, log
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 
 
 # 迁移表：旧版本 -> 迁移函数。新版本加表/列等结构变更时，在这里登记迁移函数。
 # 函数签名：def migrate_v8_to_v9(conn)，在事务内执行，返回 None。
+def _migrate_v8_to_v9(conn):
+    """v9：新增外部标签写入审核队列表。"""
+    conn.execute("""CREATE TABLE IF NOT EXISTS pending_tag_applies (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        folder_path TEXT NOT NULL,
+        tag_name TEXT NOT NULL,
+        parent_name TEXT,
+        source TEXT,
+        status TEXT DEFAULT 'pending',
+        created_at TEXT DEFAULT (datetime('now','localtime')))""")
+
+
 _MIGRATIONS = {
-    # 示例（当前没有历史迁移需要做，机制先立起来）：
-    # 8: _migrate_v8,
+    8: _migrate_v8_to_v9,
 }
 
 
@@ -173,6 +184,14 @@ class Store:
             path TEXT NOT NULL UNIQUE,
             alias TEXT NOT NULL,
             created_at TEXT DEFAULT (datetime('now','localtime')))""")
+        c.execute("""CREATE TABLE IF NOT EXISTS pending_tag_applies (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            folder_path TEXT NOT NULL,
+            tag_name TEXT NOT NULL,
+            parent_name TEXT,
+            source TEXT,
+            status TEXT DEFAULT 'pending',
+            created_at TEXT DEFAULT (datetime('now','localtime')))""")
         ver = _current_schema_version(c)
         if ver is None:
             c.execute("INSERT INTO meta (key, value) VALUES ('schema_version', ?)",
@@ -245,6 +264,32 @@ class Store:
             "INSERT INTO image_tags (name, parent_id) VALUES (?,?)", (name, parent_id))
         self._conn.commit()
         return cur.lastrowid
+
+    def get_or_create_tag(self, name, parent_name=None):
+        """按 (父标签名, 标签名) 幂等建标签，返回标签 id。用于外部写入。
+        不存在的父标签会一并创建（parent_name 为空则建在根）。
+        返回 (tag_id, created: bool)。"""
+        name = (name or "").strip()
+        if not name:
+            return None, False
+        parent_id = 0
+        if parent_name:
+            pname = (parent_name or "").strip()
+            if pname:
+                row = self._conn.execute(
+                    "SELECT id FROM image_tags WHERE name=? AND parent_id=0",
+                    (pname,)).fetchone()
+                if row:
+                    parent_id = row["id"]
+                else:
+                    parent_id = self.add_tag(pname, 0)
+        row = self._conn.execute(
+            "SELECT id FROM image_tags WHERE name=? AND parent_id=?",
+            (name, parent_id)).fetchone()
+        if row:
+            return row["id"], False
+        tid = self.add_tag(name, parent_id)
+        return tid, True
 
     def rename_tag(self, tag_id, name):
         self._conn.execute("UPDATE image_tags SET name=? WHERE id=?", (name, tag_id))
@@ -333,6 +378,81 @@ class Store:
                 "INSERT INTO folder_tags (folder_path, tag_id) VALUES (?,?)", (folder_path, tid))
         self._conn.commit()
 
+
+    def append_folder_tags(self, folder_path, tag_ids):
+        """追加模式：在现有标签基础上追加 tag_ids（含祖先链），不删除已有。幂等。"""
+        folder_path = folder_path.replace("\\", "/").rstrip("/")
+        existing = {r["tag_id"] for r in self._conn.execute(
+            "SELECT tag_id FROM folder_tags WHERE folder_path=?", (folder_path,))}
+        expanded = set()
+        for tid in tag_ids:
+            expanded.add(int(tid))
+            for anc in self._ancestors(int(tid)):
+                expanded.add(anc)
+        new_ids = expanded - existing
+        for tid in new_ids:
+            self._conn.execute(
+                "INSERT INTO folder_tags (folder_path, tag_id) VALUES (?,?)",
+                (folder_path, tid))
+        self._conn.commit()
+
+    # ---------- 外部标签写入审核队列（v0.6.0 第 8 步） ----------
+
+    def add_pending_apply(self, folder_path, tag_name, parent_name=None, source=None):
+        """把一次外部标签写入请求放入审核队列。"""
+        folder_path = (folder_path or "").replace("\\", "/").rstrip("/")
+        cur = self._conn.execute(
+            "INSERT INTO pending_tag_applies (folder_path, tag_name, parent_name, source, status) "
+            "VALUES (?,?,?,?, 'pending')",
+            (folder_path, (tag_name or "").strip(), (parent_name or "").strip() or None,
+             source or "external"))
+        self._conn.commit()
+        return cur.lastrowid
+
+    def list_pending_applies(self, status="pending", limit=500):
+        """按路径+标签去重列出审核队列条目。"""
+        rows = self._conn.execute(
+            "SELECT id, folder_path, tag_name, parent_name, source, created_at "
+            "FROM pending_tag_applies WHERE status=? "
+            "GROUP BY folder_path, tag_name, parent_name "
+            "ORDER BY MIN(id) DESC LIMIT ?",
+            (status, limit)).fetchall()
+        return [dict(r) for r in rows]
+
+    def pending_count(self):
+        row = self._conn.execute(
+            "SELECT COUNT(*) c FROM (SELECT 1 FROM pending_tag_applies "
+            "WHERE status='pending' GROUP BY folder_path, tag_name, parent_name)").fetchone()
+        return row["c"] if row else 0
+
+    def review_pending(self, ids, accept=True):
+        """审核：接受则把 (path, tag) 写入 folder_tags（含祖先链），并标记 done；
+        拒绝则直接标记 rejected。返回 {ok, accepted, rejected}。"""
+        if not ids:
+            return {"ok": True, "accepted": 0, "rejected": 0}
+        marks = ",".join("?" * len(ids))
+        rows = self._conn.execute(
+            f"SELECT DISTINCT folder_path, tag_name, parent_name FROM pending_tag_applies "
+            f"WHERE id IN ({marks}) AND status='pending'", ids).fetchall()
+        accepted = 0
+        if accept:
+            for r in rows:
+                tid, _ = self.get_or_create_tag(r["tag_name"], r["parent_name"])
+                if tid:
+                    self.append_folder_tags(r["folder_path"], [tid])
+                    accepted += 1
+        self._conn.execute(
+            f"UPDATE pending_tag_applies SET status=? WHERE id IN ({marks})",
+            (("done" if accept else "rejected"),) + tuple(ids))
+        self._conn.commit()
+        rejected = len(ids) - accepted
+        return {"ok": True, "accepted": accepted, "rejected": rejected}
+
+    def clear_reviewed(self):
+        """清空已审核（done/rejected）的队列历史。"""
+        self._conn.execute(
+            "DELETE FROM pending_tag_applies WHERE status != 'pending'")
+        self._conn.commit()
 
     def remove_tags_for_path(self, path):
         """删除某真实路径（文件或文件夹）的所有标签关联、备注名。

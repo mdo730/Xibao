@@ -4,7 +4,8 @@ import sqlite3
 
 import pytest
 
-from src.memory.store import (check_integrity, ensure_healthy_db, salvage_db,
+from src.memory.store import (SCHEMA_VERSION, check_integrity,
+                              ensure_healthy_db, salvage_db,
                               snapshot_db, Store)
 
 
@@ -103,5 +104,5 @@ def test_store_opens_with_snapshot(tmp_path):
     _make_db(db)
     s = Store(db)
     assert s.healthy is True
-    assert s.get_meta("schema_version") == "8"
+    assert s.get_meta("schema_version") == str(SCHEMA_VERSION)
     s.close()

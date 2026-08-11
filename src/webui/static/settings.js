@@ -8,6 +8,7 @@ function openSettingsModal() {
   renderChipsSettingUI();
   updateAliasColorPreview();
   renderKnownFoldersSettingUI();
+  loadExternalSecurity();
 }
 function closeSettingsModal() {
   modalHide(document.getElementById('settings-modal'));
@@ -119,6 +120,40 @@ async function renderKnownFoldersSettingUI() {
     });
   } catch (e) {
     wrap.innerHTML = '<div class="muted">无法加载系统文件夹列表</div>';
+  }
+}
+
+// ---- 外部写入安全区 + 审核（meta 存后端） ----
+async function loadExternalSecurity() {
+  try {
+    const r = await fetch('/api/v1/security');
+    const d = await r.json();
+    if (!d.ok) return;
+    const roots = document.getElementById('set-allow-roots');
+    if (roots) roots.value = (d.roots || []).join(', ');
+    const audit = document.getElementById('set-ext-audit');
+    if (audit) audit.checked = !!d.audit;
+  } catch (e) { /* 忽略 */ }
+}
+async function saveExternalSecurity() {
+  const rootsEl = document.getElementById('set-allow-roots');
+  const auditEl = document.getElementById('set-ext-audit');
+  const roots = rootsEl ? rootsEl.value.split(/[,，]/).map(s => s.trim()).filter(Boolean) : [];
+  const audit = !!(auditEl && auditEl.checked);
+  const status = document.getElementById('set-ext-status');
+  if (status) { status.textContent = '⏳ 保存中…'; status.className = 'search-feedback'; }
+  try {
+    const r = await fetch('/api/v1/security', {method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({roots, audit})});
+    const d = await r.json();
+    if (!d.ok) {
+      if (status) { status.textContent = '❌ ' + (d.error || '保存失败'); status.className = 'search-feedback fail'; }
+      loadExternalSecurity();
+      return;
+    }
+    if (status) { status.textContent = '✅ 已保存'; status.className = 'search-feedback ok'; }
+  } catch (e) {
+    if (status) { status.textContent = '❌ 保存失败: ' + e.message; status.className = 'search-feedback fail'; }
   }
 }
 

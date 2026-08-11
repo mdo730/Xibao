@@ -48,6 +48,9 @@
       </div>
     </span>
     <button class="mini alias-mode-btn" id="btn-alias-mode" onclick="toggleDisplayMode()" title="切换显示模式：文件名 / 备注名（快捷键 Q）"></button>
+    <button class="mini" id="btn-pending-review" onclick="openReviewModal()" title="外部写入待审核">
+      🕓 待审核 <span class="pending-badge hidden" id="pending-badge">0</span>
+    </button>
     <button class="mini" onclick="openSettingsModal()" title="设置">⚙️</button>
   </div>
 
@@ -167,6 +170,27 @@
   </div>
 </div>
 
+<!-- 外部写入审核弹窗 -->
+<div id="review-modal" class="modal hidden" onclick="if(event.target===this)closeReviewModal()">
+  <div class="modal-box" style="width:760px;max-width:94vw">
+    <div class="modal-head">
+      <h3>🕓 外部写入待审核</h3>
+      <span>
+        <button class="mini" onclick="reviewAll(true)" title="接受全部">✅ 全部接受</button>
+        <button class="mini" onclick="reviewAll(false)" title="拒绝全部">🗑 全部拒绝</button>
+        <button class="modal-x" onclick="closeReviewModal()" title="关闭">×</button>
+      </span>
+    </div>
+    <div class="settings-body" id="review-list" style="overflow-y:auto;flex:1;min-height:0;padding-right:6px">
+      <div class="muted" style="padding:20px;text-align:center">加载中…</div>
+    </div>
+    <div class="modal-actions">
+      <span class="muted" id="review-summary"></span>
+      <button class="mini" onclick="clearReviewed()" title="清空已审核的历史记录">清空已审核</button>
+    </div>
+  </div>
+</div>
+
 <!-- 设置弹窗 -->
 <div id="settings-modal" class="modal hidden" onclick="if(event.target===this)closeSettingsModal()">
   <div class="modal-box">
@@ -217,6 +241,21 @@
           <input type="checkbox" id="set-migrate-tags" style="width:auto" onchange="saveMigrateSetting()"> 移动/重命名时迁移标签（关闭则清理旧路径的标签，避免残留）
         </label>
         <p class="muted" style="margin-top:6px">开启后，文件或文件夹移动/重命名，其标签会跟随到新位置；关闭则移除旧位置及子项的标签关联。</p>
+      </div>
+
+      <div class="settings-block">
+        <h4>🔌 外部写入</h4>
+        <p class="muted">供插件/脚本批量写入标签。只允许在安全区目录内操作，默认需人工审核。</p>
+        <div style="margin-top:10px">
+          <div class="muted" style="margin-bottom:4px">安全区目录（一个或多个，逗号分隔）：</div>
+          <input type="text" id="set-allow-roots" placeholder="例如 D:/素材, E:/下载" style="width:100%">
+          <button class="mini" style="margin-top:6px" onclick="saveExternalSecurity()">保存安全区</button>
+          <span id="set-ext-status" class="search-feedback"></span>
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:10px">
+          <input type="checkbox" id="set-ext-audit" style="width:auto" onchange="saveExternalSecurity()"> 外部写入需人工审核（关闭则写入直接生效）
+        </label>
+        <p class="muted" style="margin-top:6px">留空安全区 = 完全关闭外部写入。开启审核时，写入先进「🕓 待审核」队列，你在工具栏确认后才生效。</p>
       </div>
 
       <div class="settings-block">
@@ -351,6 +390,7 @@
       <p><strong>标签迁移</strong>：开启后，文件/文件夹移动或重命名时，标签会跟随到新位置；关闭则清理旧位置的标签关联（默认关闭）。</p>
       <p><strong>筛选胶囊</strong>：可切换胶囊显示位置（标签树顶 / 地址栏下方）与尺寸（小/中/大）。</p>
       <p><strong>文件树</strong>：可开关「显示系统文件夹」，并可勾选要保留的项（桌面/下载/图片等）；不常用的话可只留磁盘。</p>
+      <p><strong>外部写入</strong>：插件/脚本可批量给文件打标签。安全区目录限定可操作范围（留空=关闭）；默认写入需在工具栏「🕓 待审核」确认后才生效。</p>
       <p><strong>标签备份</strong>：导出/导入标签，方便换电脑或备份。</p>
     </details>
   </div>
@@ -376,6 +416,8 @@
       <p>· 新增：右键外部工具集成——自动探测 7-Zip/WinRAR/Bandizip/Locale Emulator/Everything，右键即可解压/用 LE 运行</p>
       <p>· 新增：解压后自动刷新文件列表（LE 运行不等待）</p>
       <p>· 新增：右键菜单位置约束——靠近屏幕底部/右侧时自动上移左移，不再超出显示范围</p>
+      <p>· 新增：外部标签写入 API——插件/脚本可批量打标签，安全区目录限制范围，默认需人工审核</p>
+      <p>· 新增：工具栏「🕓 待审核」——外部写入的标签先进队列，可逐条或批量接受/拒绝</p>
     </details>
     <details>
       <summary>v0.5.5</summary>
@@ -448,6 +490,7 @@
 <script src="{{ url_for('static', filename='explorer-ui.js') }}?v=5"></script>
 <script src="{{ url_for('static', filename='explorer-tags-jstree.js') }}?v=3"></script>
 <script src="{{ url_for('static', filename='explorer-schemes.js') }}?v=1"></script>
+<script src="{{ url_for('static', filename='review.js') }}?v=1"></script>
 <script src="{{ url_for('static', filename='settings.js') }}?v=2"></script>
 {% endblock %}
 
