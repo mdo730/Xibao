@@ -26,11 +26,17 @@ function iconSvgUrl(name) {
 
 // 返回内联 <img> 或 fallback span 的 HTML
 function fileIconHtml(name, cls, fallbackCls, emoji, path) {
+  const ext = (name.lastIndexOf('.') > 0) ? name.slice(name.lastIndexOf('.') + 1).toLowerCase() : '';
+  // .exe 等可执行/系统文件：优先系统图标（游戏图标专业），不走 SVG 映射
+  const sysIconExts = {exe: 1, msi: 1, lnk: 1, ico: 1, url: 1, bat: 1, cmd: 1};
+  if (sysIconExts[ext] && path) {
+    return `<img class="${cls}" src="/api/fileicon?path=${encodeURIComponent(path)}&size=64" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'${fallbackCls}',textContent:'${emoji}'}))">`;
+  }
   const iconName = iconNameForFile(name);
   if (iconName) {
     return `<img class="${cls}" src="${iconSvgUrl(iconName)}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'${fallbackCls}',textContent:'${emoji}'}))">`;
   }
-  // 无 SVG 映射：尝试系统文件图标（.exe 游戏/3D等），失败回退 emoji
+  // 无 SVG 映射：尝试系统文件图标（3D等），失败回退 emoji
   if (path) {
     return `<img class="${cls}" src="/api/fileicon?path=${encodeURIComponent(path)}&size=64" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'${fallbackCls}',textContent:'${emoji}'}))">`;
   }

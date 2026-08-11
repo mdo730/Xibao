@@ -306,7 +306,7 @@ def api_tools_run():
 
 @files_bp.get("/api/fileicon")
 def api_fileicon():
-    """取系统文件图标（ICONONLY），按扩展名缓存到磁盘。返回 PNG。"""
+    """取系统文件图标（ICONONLY）。可执行文件（exe/lnk/ico 等图标各异）按完整路径缓存，其余按扩展名。返回 PNG。"""
     from ...images import shell_thumbnail
     path = request.args.get("path") or ""
     try:
@@ -320,13 +320,15 @@ def api_fileicon():
     icon_dir = os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"),
                             "Xibao", "fileicons")
     os.makedirs(icon_dir, exist_ok=True)
-    digest = hashlib.md5(ext.encode("utf-8")).hexdigest()[:12]
+    # 可执行文件图标因程序而异，按完整路径缓存；其他格式图标相同，按扩展名缓存
+    per_file = ext in (".exe", ".lnk", ".ico", ".url", ".msi", ".bat", ".cmd")
+    key_source = path if per_file else ext
+    digest = hashlib.md5(key_source.encode("utf-8")).hexdigest()[:12]
     cached = os.path.join(icon_dir, f"{digest}_{size}.png")
     if os.path.exists(cached):
         return send_file(cached, mimetype="image/png", max_age=86400)
     img = shell_thumbnail.get_shell_icon(path, size)
     if img is None:
         return jsonify({"ok": False, "error": "无图标"}), 404
-    import io
     img.save(cached, format="PNG")
     return send_file(cached, mimetype="image/png", max_age=86400)
