@@ -120,6 +120,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: #0b57d0
 .ctx-menu div { padding: 8px 12px; font-size: 13px; cursor: pointer; border-radius: 5px; }
 .ctx-menu div:hover { background: #f2f2f2; }
 .ctx-key { float: right; color: #999; font-size: 11px; margin-left: 14px; }
+.ctx-sep { height: 1px; background: #e5e5e5; margin: 4px 0; }
 .alias-name { display: inline-block; padding: 0 3px; border-radius: 3px; }
 .alias-mode-btn { min-width: 88px; }
 .cell-content { position: relative; }

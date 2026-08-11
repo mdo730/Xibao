@@ -265,3 +265,35 @@ def api_thumb():
     if not thumbnail.is_failed(path, size):
         thumbnail.request_thumb(path, size)
     return jsonify({"ok": False, "error": "not ready"}), 404
+
+
+# ---------- 外部工具集成（v0.6.0 第 4 步） ----------
+
+@files_bp.get("/api/tools")
+def api_tools():
+    """返回已装第三方工具可用的右键动作清单。"""
+    from ...images import tools
+    try:
+        items = [t.to_dict() for t in tools.detect_tools()]
+        return jsonify({"ok": True, "tools": items})
+    except Exception as e:
+        return jsonify({"ok": False, "tools": [], "error": str(e)})
+
+
+@files_bp.post("/api/tools/run")
+def api_tools_run():
+    """执行某个工具动作。body: {key, path, workdir?}。后台线程执行，立即返回。"""
+    from ...images import tools
+    data = request.get_json(force=True) or {}
+    key = data.get("key") or ""
+    path = data.get("path") or ""
+    workdir = data.get("workdir") or ""
+    if not key or not path:
+        return jsonify({"ok": False, "error": "缺少参数"}), 400
+    t = tools.get_tool(key)
+    if not t:
+        return jsonify({"ok": False, "error": "工具不可用"}), 400
+    wd = workdir or os.path.dirname(path) or "."
+    import threading
+    threading.Thread(target=t.run, args=(path, wd), daemon=True).start()
+    return jsonify({"ok": True})

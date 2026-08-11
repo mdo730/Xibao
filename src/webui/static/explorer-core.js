@@ -580,10 +580,42 @@ function showCtx(e, path, kind, type) {
   html += '<div onclick="ctxRename()">重命名 <span class="ctx-key">F2</span></div>';
   html += '<div onclick="ctxDelete()">删除</div>';
   html += '<div onclick="ctxAttr()">属性 <span class="ctx-key">F</span></div>';
+  html += '<div class="ctx-sep"></div><div class="ctx-tools-loading muted" style="padding:6px 12px;font-size:12px;color:#999">外部工具…</div>';
   menu.innerHTML = html;
   menu.classList.remove('hidden');
-  menu.style.left = Math.min(e.clientX, window.innerWidth - 160) + 'px';
-  menu.style.top = Math.min(e.clientY, window.innerHeight - 200) + 'px';
+  menu.style.left = Math.min(e.clientX, window.innerWidth - 200) + 'px';
+  menu.style.top = Math.min(e.clientY, window.innerHeight - 240) + 'px';
+  // 异步加载外部工具动作（仅单选/目标为文件或文件夹时）
+  if (selected.size <= 1) loadCtxTools(path);
+}
+// 加载外部工具动作到右键菜单
+async function loadCtxTools(path) {
+  const menu = document.getElementById('ctx-menu');
+  const loading = menu.querySelector('.ctx-tools-loading');
+  try {
+    const r = await fetch('/api/tools');
+    const d = await r.json();
+    const tools = (d.tools || []).filter(t => t.key !== 'everything-search-here');
+    if (loading) loading.remove();
+    if (!tools.length) {
+      // 无工具：移除分隔线，菜单干净
+      const sep = menu.querySelector('.ctx-sep');
+      if (sep) sep.remove();
+      return;
+    }
+    const wrap = menu.querySelector('.ctx-sep');
+    if (!wrap) return;
+    tools.forEach(t => {
+      const div = document.createElement('div');
+      div.textContent = t.label;
+      div.onclick = () => ctxRunTool(t.key, path);
+      menu.insertBefore(div, null);
+    });
+  } catch (e) { if (loading) loading.remove(); }
+}
+function ctxRunTool(key, path) {
+  hideContextMenus();
+  fetch('/api/tools/run', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({key, path})});
 }
 function hideContextMenus() {
   document.getElementById('ctx-menu').classList.add('hidden');
