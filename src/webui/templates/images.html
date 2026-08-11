@@ -180,6 +180,7 @@
       <h3>设置</h3>
       <span>
         <button class="mini" onclick="openHelpFloat()" title="查看使用帮助">📖 帮助</button>
+        <button class="mini" onclick="openChangelogFloat()" title="查看更新日志">📜 更新日志</button>
         <a class="mini feedback-link" href="https://www.bilibili.com/opus/1234314012554952704#reply404813517" target="_blank" rel="noopener">🐛 错误反馈</a>
         <button class="modal-x" onclick="closeSettingsModal()" title="关闭">×</button>
       </span>
@@ -285,7 +286,7 @@
       </div>
 
       <div class="settings-block">
-        <h4>🔌 外部写入</h4>
+        <h4>🔌 外部写入 <span class="muted" style="font-size:11px;font-weight:400">（未实装，仅预留端口）</span></h4>
         <p class="muted" style="margin-bottom:8px">接口已预留，供插件/脚本批量写入标签（限安全区目录、默认人工审核）。</p>
         <div class="muted" style="margin-bottom:4px">安全区目录（逗号分隔）：</div>
         <input type="text" id="set-allow-roots" placeholder="例如 D:/素材, E:/下载" style="width:100%">
@@ -303,9 +304,6 @@
       <div class="version-info">西煲 <strong>v0.6.0</strong></div>
       <div class="version-info author-line">作者 <a href="https://space.bilibili.com/128210" target="_blank" rel="noopener">@parukamun</a></div>
       <div class="version-info free-note">该软件永久免费，付费了说明你被骗了！</div>
-      <div class="version-info" style="margin-top:10px">
-        <button class="mini" onclick="openChangelogFloat()">📜 更新日志</button>
-      </div>
     </div>
   </div>
 </div>
