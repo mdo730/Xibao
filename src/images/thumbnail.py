@@ -81,16 +81,41 @@ def _extract_frame(path, size):
         return out.getvalue()
 
 
+def _extract_frame_av(path, size):
+    """PyAV 提取帧（回退后端）。"""
+    return _extract_frame(path, size)
+
+
 def get_video_thumb(path, size=256):
-    """获取缩略图。命中缓存返回 (True, thumb_path)；生成失败返回 (False, None)。"""
+    """获取缩略图，多后端：系统 COM 优先，PyAV 回退。
+    命中缓存返回 (True, thumb_path)；生成失败返回 (False, None)。"""
     if not os.path.isfile(path):
         return False, None
     cached = _cache_hit(path, size)
     if cached:
         return True, cached
     os.makedirs(thumb_dir(), exist_ok=True)
+    data = None
+    # 后端1：系统 COM 缩略图（覆盖广、与资源管理器一致）
     try:
-        data = _extract_frame(path, size)
+        from ..images import shell_thumbnail
+        img = shell_thumbnail.get_shell_thumbnail(path, size)
+        if img is not None:
+            out = io.BytesIO()
+            img.convert("RGB").save(out, format="JPEG", quality=82)
+            data = out.getvalue()
+    except Exception as e:
+        log.warning("COM 缩略图失败 %s: %s", path, e)
+    # 后端2：PyAV 回退（仅当 COM 无结果）
+    if data is None:
+        try:
+            data = _extract_frame_av(path, size)
+        except Exception as e:
+            log.warning("PyAV 缩略图失败 %s: %s", path, e)
+    if data is None:
+        _write_fail(path, size)
+        return False, None
+    try:
         thumb_path = os.path.join(thumb_dir(), _cache_key(path, size))
         tmp = thumb_path + ".tmp"
         with open(tmp, "wb") as f:

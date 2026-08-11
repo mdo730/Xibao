@@ -418,16 +418,19 @@ function appendGridView(chunk, startIdx) {
     } else if (it.type === 'image') {
       display = `<img class="cell-thumb" src="${relUrl(it.path)}" loading="lazy">`;
     } else if (it.type === 'video') {
-      // 视频：尝试缩略图，失败回退图标（用 data-path 事件委托处理错误）
-      display = `<img class="cell-thumb video-thumb" data-path="${encodeURIComponent(it.path)}" src="/api/thumb?path=${encodeURIComponent(it.path)}&size=256" loading="lazy">`;
+      // 视频：尝试系统缩略图，失败回退图标
+      display = `<img class="cell-thumb video-thumb" src="/api/thumb?path=${encodeURIComponent(it.path)}&size=256" loading="lazy">`;
+    } else if (it.type === 'doc' || it.type === 'pdf' || it.type === 'archive' || it.type === 'code') {
+      // 文档/PDF/压缩包/代码：尝试系统 COM 缩略图（PSD/Office/PDF 有效），失败回退图标
+      display = `<img class="cell-thumb doc-thumb" src="/api/thumb?path=${encodeURIComponent(it.path)}&size=256" loading="lazy">`;
     } else {
       display = fileIconHtml(it.name, 'cell-icon-img', 'cell-icon', iconOf(it.type));
     }
     const meta = it.isFolder ? `${it.file_count} 项` : fmtSize(it.size);
     div.innerHTML = `<div class="cell-content">${display}</div><div class="cell-name">${nameHtml(it)}</div><div class="cell-meta">${meta}</div>`;
-    // 视频缩略图加载失败 → 回退图标
-    if (it.type === 'video') {
-      const vt = div.querySelector('.video-thumb');
+    // 非图片缩略图加载失败 → 回退图标
+    if (it.type !== 'image') {
+      const vt = div.querySelector('.video-thumb, .doc-thumb');
       if (vt) vt.onerror = () => {
         vt.outerHTML = fileIconHtml(it.name, 'cell-icon-img', 'cell-icon', iconOf(it.type));
       };
