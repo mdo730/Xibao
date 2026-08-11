@@ -84,6 +84,36 @@ def test_pending_dedup(store):
     assert len(items) == 1
 
 
+def test_review_clears_duplicate_rows(store):
+    """同一 (path, tag) 被重复写入多行时，审核一次应全部清掉，不残留。"""
+    store.add_pending_apply("D:/a.png", "重复标签", None, "s1")
+    store.add_pending_apply("D:/a.png", "重复标签", None, "s2")
+    store.add_pending_apply("D:/a.png", "重复标签", None, "s3")
+    assert store.pending_count() == 1
+    # 审核拿到的 id 是合并后的一行
+    items = store.list_pending_applies("pending")
+    ids = [it["id"] for it in items]
+    res = store.review_pending(ids, True)
+    assert res["accepted"] == 1
+    assert store.pending_count() == 0          # 不残留
+    tags = store.tags_for_folder("D:/a.png")
+    assert any(t["name"] == "重复标签" for t in tags)
+
+
+def test_review_mixed_reject_accept(store):
+    store.add_pending_apply("D:/a.png", "好标签", None, "s1")
+    store.add_pending_apply("D:/b.png", "坏标签", None, "s1")
+    items = store.list_pending_applies("pending")
+    ids = [it["id"] for it in items]
+    # 只接受 a.png
+    res = store.review_pending([i for i, it in zip(ids, items) if it["folder_path"] == "D:/a.png"], True)
+    assert res["accepted"] == 1
+    assert store.pending_count() == 1
+    res2 = store.review_pending(ids, False)
+    assert res2["accepted"] == 0
+    assert store.pending_count() == 0
+
+
 def test_append_includes_ancestors(store):
     # 挂"项目A"子标签时，父级"工作"也应带出（祖先链）
     child_id, _ = store.get_or_create_tag("文档", "工作")

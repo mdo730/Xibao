@@ -427,7 +427,8 @@ class Store:
 
     def review_pending(self, ids, accept=True):
         """审核：接受则把 (path, tag) 写入 folder_tags（含祖先链），并标记 done；
-        拒绝则直接标记 rejected。返回 {ok, accepted, rejected}。"""
+        拒绝则直接标记 rejected。返回 {ok, accepted, rejected}。
+        按内容组合（path+tag+parent）更新，避免同一组合被重复写入时只清一行而残留。"""
         if not ids:
             return {"ok": True, "accepted": 0, "rejected": 0}
         marks = ",".join("?" * len(ids))
@@ -441,11 +442,15 @@ class Store:
                 if tid:
                     self.append_folder_tags(r["folder_path"], [tid])
                     accepted += 1
-        self._conn.execute(
-            f"UPDATE pending_tag_applies SET status=? WHERE id IN ({marks})",
-            (("done" if accept else "rejected"),) + tuple(ids))
+        # 按内容组合更新所有匹配的 pending 行（含重复插入的多行），杜绝残留
+        for r in rows:
+            self._conn.execute(
+                "UPDATE pending_tag_applies SET status=? "
+                "WHERE status='pending' AND folder_path=? AND tag_name=? AND parent_name IS ?",
+                (("done" if accept else "rejected"), r["folder_path"],
+                 r["tag_name"], r["parent_name"]))
         self._conn.commit()
-        rejected = len(ids) - accepted
+        rejected = len(rows) - accepted
         return {"ok": True, "accepted": accepted, "rejected": rejected}
 
     def clear_reviewed(self):
