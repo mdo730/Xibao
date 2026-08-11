@@ -59,13 +59,16 @@ def test_set_tag_color(store):
     assert store.all_tags()[0]["color"] is None
 
 
-def test_ancestors_order(store):
+def test_flat_dict(store):
     a = store.add_tag("工作")
     b = store.add_tag("项目A", a)
     c = store.add_tag("会议", b)
-    assert store._ancestors(c) == [b, a]
-    assert store._ancestors(a) == []
-    assert store._ancestors(999) == []
+    d = store.add_tag("独立")
+    flat = store._flat_dict()
+    assert flat[a] == frozenset({a, b, c})
+    assert flat[b] == frozenset({b, c})
+    assert flat[c] == frozenset({c})
+    assert flat[d] == frozenset({d})
 
 
 def test_descendants(store):
@@ -88,13 +91,14 @@ def test_delete_tag_cascades(store):
     assert store.tags_for_folder("C:/x/y") == []
 
 
-def test_set_folder_tags_expands_ancestors(store):
+def test_set_folder_tags_stores_leaves_only(store):
     a = store.add_tag("工作")
     b = store.add_tag("项目A", a)
     c = store.add_tag("会议", b)
     store.set_folder_tags("C:/x/y", [c])
     got = store.tags_for_folder("C:/x/y")
-    assert {t["id"] for t in got} == {a, b, c}
+    # 不物化：只存实际勾选的 c（叶子）
+    assert {t["id"] for t in got} == {c}
 
 
 def test_set_folder_tags_normalizes_path(store):
@@ -199,7 +203,7 @@ def test_export_import_merge_dedupes_relations(store):
     store2.import_tags(store.export_tags(), mode="merge")
     store2.import_tags(store.export_tags(), mode="merge")
     rels = store2.tags_for_folder("C:/proj/b")
-    assert len(rels) == 2  # 祖先链 工作 + 项目A，不重复
+    assert len(rels) == 1  # 不物化：只存勾选的 项目A，不重复
     store2.close()
 
 

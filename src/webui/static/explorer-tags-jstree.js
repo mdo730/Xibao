@@ -91,14 +91,6 @@ function renderTagTree() {
         const idx = (parentNode.children || []).indexOf(data.node.id);
         position = idx >= 0 ? idx : 0;
       } catch (e) { position = data.position || 0; }
-      // 记录原位置（用于用户取消时回滚）
-      const oldParent = data.old_parent && data.old_parent !== '#' ? data.old_parent : null;
-      let oldParentId = 0;
-      if (oldParent) {
-        const op = oldParent.indexOf('tag_') === 0 ? parseInt(oldParent.replace('tag_', '')) : NaN;
-        oldParentId = isNaN(op) ? 0 : op;
-      }
-      let oldPosition = data.old_position || 0;
 
       function persist() {
         return fetch('/api/tags/' + tid + '/move', {
@@ -107,14 +99,6 @@ function renderTagTree() {
           body: JSON.stringify({parent_id: newParentId, order: position}),
         }).then(r => r.json()).catch(() => ({ok: false, error: '网络错误'}));
       }
-      function rollback() {
-        // 撤回：移回原父级原位置
-        return fetch('/api/tags/' + tid + '/move', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({parent_id: oldParentId, order: oldPosition}),
-        }).catch(() => {}).then(() => loadTags());
-      }
 
       persist().then(d => {
         if (!d.ok) {
@@ -122,18 +106,7 @@ function renderTagTree() {
           loadTags();
           return;
         }
-        if (d.orphans && d.orphans.length) {
-          const names = d.orphans.slice(0, 5).map(o => '· ' + o.path.split('/').pop() + ' → ' + o.tag).join('\n');
-          const more = d.orphans.length > 5 ? '\n…等 ' + d.orphans.length + ' 个' : '';
-          const ok = confirm('⚠️ 本次移动产生了 ' + d.orphans.length + ' 个「孤儿挂载」：\n\n' +
-            names + more + '\n\n这些文件挂了父级标签，但移动后无法在编辑标签里取消。\n\n' +
-            '确定继续？（会自动移入「标签异常」警示区）\n取消则撤回本次拖动。');
-          if (!ok) {
-            rollback();
-            return;
-          }
-        }
-        // 无论是否产生孤儿，移动成功都刷新标签树统计（含祖先链同步后的计数）
+        // 移动成功刷新标签树（计数已由后端 CTE 重算）
         loadTags();
       });
     }).on('ready.jstree', function () {

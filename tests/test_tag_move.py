@@ -77,29 +77,29 @@ def test_export_import_preserves_order(store):
     s2.close()
 
 
-def test_move_syncs_ancestors(store):
-    """拖动标签改层级后，已挂该子级标签的文件应补上新父级祖先链（计数一致）。"""
-    # 截图/表情 初始都是根级
-    shot = store.add_tag("截图")          # 截图(父)
-    expr = store.add_tag("表情")          # 表情(子，后续被拖入截图下)
-    # 文件在"表情还是根级"时挂表情
+def test_move_changes_hierarchy_counts(store):
+    """拖动标签改层级后：folder_tags 不动（不物化），计数由 CTE 展开保证父级含子孙。"""
+    shot = store.add_tag("截图")
+    expr = store.add_tag("表情")
+    # 文件挂表情（此时表情是根级）
     store.set_folder_tags("D:/a.gif", [expr])
     # 拖动：表情 → 截图 的子级
     store.move_tag(expr, shot, 0)
+    # 不物化：folder_tags 只存勾选的表情，不自动补截图
     tags = store.tags_for_folder("D:/a.gif")
     ids = {t["id"] for t in tags}
-    assert shot in ids      # 挂表情的文件自动补上截图
-    # 计数一致：截图 >= 表情（挂表情必带截图）
+    assert ids == {expr}
+    # 但计数 CTE 展开：截图（含子孙表情）应 >= 表情
     counts = store.tag_counts()
-    assert counts.get(shot, 0) >= counts.get(expr, 0)
+    assert counts.get(shot, 0) == counts.get(expr, 0) == 1
 
 
-def test_move_out_of_parent_keeps_ancestors(store):
-    """把标签从父级移出（回到根），已挂它的文件保留原父级不删（只增不删）。"""
+def test_move_out_of_parent_no_orphan(store):
+    """把标签从父级移出（回到根）：folder_tags 不动，无残留无孤儿。"""
     p = store.add_tag("P")
     c = store.add_tag("C", p)
-    store.set_folder_tags("D:/b.png", [c])     # 挂 C → 自动带 P
-    store.move_tag(c, 0, 0)                    # C 移出 P
+    store.set_folder_tags("D:/b.png", [c])
+    store.move_tag(c, 0, 0)      # C 移出 P
     tags = store.tags_for_folder("D:/b.png")
     ids = {t["id"] for t in tags}
-    assert c in ids and p in ids               # 只增不删
+    assert ids == {c}            # 只存勾选的 C，P 从不被写入

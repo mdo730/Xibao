@@ -10,7 +10,7 @@ import sqlite3
 
 from ..common import appdata_dir, log
 
-SCHEMA_VERSION = 10
+SCHEMA_VERSION = 11
 
 
 # 迁移表：旧版本 -> 迁移函数。新版本加表/列等结构变更时，在这里登记迁移函数。
@@ -36,9 +36,39 @@ def _migrate_v9_to_v10(conn):
         conn.execute("UPDATE image_tags SET sort_order = id")
 
 
+def _migrate_v10_to_v11(conn):
+    """v11：层级展开重构——folder_tags 只存实际勾选（叶子），不再物化祖先链。
+
+    历史物化数据规范化：
+    1) 清理指向不存在标签的孤儿关联
+    2) 去重（历史可能留有重复行）
+    3) 删除"同路径上某标签的子孙也在存"的父级冗余行（物化带来的）
+    4) 加 UNIQUE(folder_path, tag_id) 防未来重复
+    """
+    conn.execute("DELETE FROM folder_tags WHERE tag_id NOT IN (SELECT id FROM image_tags)")
+    conn.execute("""DELETE FROM folder_tags WHERE id NOT IN (
+        SELECT MIN(id) FROM folder_tags GROUP BY folder_path, tag_id)""")
+    # 递归 CTE：删除"同路径上有子孙也在存"的父级行（物化冗余）
+    conn.execute("""
+        WITH RECURSIVE descendants(root_id, desc_id) AS (
+            SELECT id, id FROM image_tags
+            UNION ALL
+            SELECT d.root_id, t.id FROM descendants d
+            JOIN image_tags t ON t.parent_id = d.desc_id
+        )
+        DELETE FROM folder_tags WHERE id IN (
+            SELECT ft.id FROM folder_tags ft
+            JOIN descendants d ON d.root_id = ft.tag_id AND d.desc_id != d.root_id
+            JOIN folder_tags ft2 ON ft2.folder_path = ft.folder_path AND ft2.tag_id = d.desc_id
+        )""")
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_folder_tags_path_tag "
+                 "ON folder_tags(folder_path, tag_id)")
+
+
 _MIGRATIONS = {
     8: _migrate_v8_to_v9,
     9: _migrate_v9_to_v10,
+    10: _migrate_v10_to_v11,
 }
 
 
@@ -317,13 +347,37 @@ class Store:
         self._conn.commit()
 
     def delete_tag(self, tag_id):
-        # 删除标签及其子标签、关联
-        ids = self._descendants(tag_id)
-        ids.append(tag_id)
+        # 删除标签及其子标签、关联（不物化，直接删闭包）
+        ids = self._flat_dict().get(int(tag_id), {int(tag_id)})
         q = ",".join("?" * len(ids))
-        self._conn.execute(f"DELETE FROM folder_tags WHERE tag_id IN ({q})", ids)
-        self._conn.execute(f"DELETE FROM image_tags WHERE id IN ({q})", ids)
+        self._conn.execute(f"DELETE FROM folder_tags WHERE tag_id IN ({q})", list(ids))
+        self._conn.execute(f"DELETE FROM image_tags WHERE id IN ({q})", list(ids))
         self._conn.commit()
+
+    def _flat_dict(self):
+        """返回 {tag_id: frozenset(自身+全部子孙 id)}。
+        每请求重建（本地标签量级微秒级）；含环兜底（seen），防脏数据死循环。"""
+        tags = self._conn.execute("SELECT id, parent_id FROM image_tags").fetchall()
+        children = {}
+        for t in tags:
+            children.setdefault(t["parent_id"] or 0, []).append(t["id"])
+        flat = {}
+
+        def build(tid):
+            s = {tid}
+            for c in children.get(tid, ()):
+                s |= build(c)
+            flat[tid] = frozenset(s)
+            return s
+
+        for t in tags:
+            if t["parent_id"] in (None, 0):
+                build(t["id"])
+        # 兜底：孤儿节点（父级不存在）也建
+        for t in tags:
+            if t["id"] not in flat:
+                build(t["id"])
+        return flat
 
     def _descendants(self, tag_id):
         ids = []
@@ -337,88 +391,14 @@ class Store:
                 stack.append(r["id"])
         return ids
 
-    def _ancestors(self, tag_id):
-        """返回某标签的所有祖先 id（不含自身），从根到直接父级。"""
-        out = []
-        cur = tag_id
-        seen = set()
-        while cur is not None and cur not in seen:
-            seen.add(cur)
-            row = self._conn.execute(
-                "SELECT parent_id FROM image_tags WHERE id=?", (cur,)).fetchone()
-            if row is None or row["parent_id"] is None:
-                break
-            parent = row["parent_id"]
-            if parent:
-                out.append(parent)
-                cur = parent
-            else:
-                break
-        return out
-
     def all_tags(self):
         return [dict(r) for r in self._conn.execute(
             "SELECT * FROM image_tags ORDER BY parent_id, sort_order, id").fetchall()]
 
-    def _ancestor_map(self):
-        """构建 {tag_id: set(祖先id)}，一次性查全部，避免 N+1。"""
-        tags = self.all_tags()
-        parent_of = {t["id"]: t["parent_id"] for t in tags}
-        map_ = {}
-        for t in tags:
-            anc = set()
-            cur = t["parent_id"]
-            seen = set()
-            while cur and cur not in seen:
-                seen.add(cur)
-                anc.add(cur)
-                nxt = parent_of.get(cur)
-                if not nxt or nxt == cur:
-                    break
-                cur = nxt
-            map_[t["id"]] = anc
-        return map_
-
-    def _sync_ancestors_for_paths(self, paths, ancestor_map):
-        """为指定路径集合补齐缺失的祖先链关联（只增不删）。返回补条数。"""
-        added = 0
-        for path in paths:
-            cur = {r["tag_id"] for r in self._conn.execute(
-                "SELECT tag_id FROM folder_tags WHERE folder_path=?", (path,)).fetchall()}
-            to_add = set()
-            for tid in cur:
-                to_add |= ancestor_map.get(tid, set())
-            new = cur | to_add
-            for tid in new - cur:
-                self._conn.execute(
-                    "INSERT INTO folder_tags (folder_path, tag_id) VALUES (?,?)",
-                    (path, tid))
-                added += 1
-        return added
-
-    def sync_all_ancestors(self):
-        """全量修复：为所有文件补齐缺失的祖先链关联（挂子级必带父级）。
-        用于修复历史数据（拖动标签改层级前的旧挂载）。返回补条数。"""
-        paths = [r["folder_path"] for r in self._conn.execute(
-            "SELECT DISTINCT folder_path FROM folder_tags").fetchall()]
-        added = self._sync_ancestors_for_paths(paths, self._ancestor_map())
-        self._conn.commit()
-        return added
-
-    def _sync_ancestors_for_tree(self, tag_id):
-        """移动标签后同步：把所有挂了 tag_id 子树（含自身）的文件，补上这些标签
-        当前的新祖先链关联。确保"挂子级必带父级"的一致性（拖动改层级后计数不偏差）。"""
-        sub_ids = self._descendants(tag_id)
-        sub_ids.append(tag_id)
-        q = ",".join("?" * len(sub_ids))
-        paths = [r["folder_path"] for r in self._conn.execute(
-            f"SELECT DISTINCT folder_path FROM folder_tags WHERE tag_id IN ({q})",
-            sub_ids).fetchall()]
-        self._sync_ancestors_for_paths(paths, self._ancestor_map())
-
     def move_tag(self, tag_id, new_parent_id, order):
         """移动标签到新父级 + 指定同级位置。order 为 0-based 同级序号。
-        防环：新父级不能是自身或自身的后代，否则抛 ValueError。"""
+        防环：新父级不能是自身或自身的后代，否则抛 ValueError。
+        不物化：改层级只动 image_tags.parent_id 一行，folder_tags 不受影响。"""
         tag_id = int(tag_id)
         new_parent_id = int(new_parent_id or 0)
         order = int(order or 0)
@@ -437,47 +417,44 @@ class Store:
         sibs.insert(max(0, min(order, len(sibs))), tag_id)
         for idx, tid in enumerate(sibs):
             self._conn.execute("UPDATE image_tags SET sort_order=? WHERE id=?", (idx, tid))
-        # 同步祖先链：挂了被移动子树标签的文件补全新祖先
-        self._sync_ancestors_for_tree(tag_id)
         self._conn.commit()
 
     def tag_counts(self):
-        """返回 {tag_id: 条数}。因 set_folder_tags 物化祖先链（挂子级自动带父级），
-        每个标签的 DISTINCT 路径数天然等于"含子孙总数"，无需递归归并。"""
+        """返回 {tag_id: 含子孙总数}。用递归 CTE 展开每个标签的全部子孙，
+        统计 folder_tags 上挂载这些子孙的 DISTINCT 路径数（保持"含子孙"显示语义）。"""
         result = {}
-        for row in self._conn.execute(
-                "SELECT tag_id, COUNT(DISTINCT folder_path) c FROM folder_tags GROUP BY tag_id"):
+        for row in self._conn.execute("""
+            WITH RECURSIVE sub(root_id, leaf_id) AS (
+                SELECT id, id FROM image_tags
+                UNION ALL
+                SELECT sub.root_id, t.id FROM sub
+                JOIN image_tags t ON t.parent_id = sub.leaf_id
+            )
+            SELECT sub.root_id AS tag_id, COUNT(DISTINCT ft.folder_path) c
+            FROM sub JOIN folder_tags ft ON ft.tag_id = sub.leaf_id
+            GROUP BY sub.root_id"""):
             result[row["tag_id"]] = row["c"]
         return result
 
     def tag_folders(self, tag_id):
-        """返回挂在该标签（含子标签）下的文件夹路径集合。"""
-        ids = self._descendants(tag_id)
-        ids.append(tag_id)
+        """返回挂在该标签（含全部子孙）下的文件夹路径集合。"""
+        ids = self._flat_dict().get(int(tag_id), {int(tag_id)})
         q = ",".join("?" * len(ids))
         rows = self._conn.execute(
-            f"SELECT DISTINCT folder_path FROM folder_tags WHERE tag_id IN ({q})", ids).fetchall()
+            f"SELECT DISTINCT folder_path FROM folder_tags WHERE tag_id IN ({q})",
+            list(ids)).fetchall()
         return [r["folder_path"] for r in rows]
-
-
-    def _expand_ancestors(self, tag_ids):
-        """展开祖先链：返回 tag_ids 及其全部祖先的 id 集合（含自身）。"""
-        expanded = set()
-        for tid in tag_ids:
-            expanded.add(int(tid))
-            for anc in self._ancestors(int(tid)):
-                expanded.add(anc)
-        return expanded
 
     def set_folder_tags(self, folder_path, tag_ids):
         """把文件夹/文件的标签设为 tag_ids 集合（全量替换）。路径统一正斜杠。
-        自动补全祖先链：勾选子级时隐式带上所有父级标签。"""
+        只存实际勾选的标签（叶子），不物化祖先链。"""
         folder_path = folder_path.replace("\\", "/").rstrip("/")
-        expanded = self._expand_ancestors(tag_ids)
+        ids = {int(t) for t in tag_ids if int(t) > 0}
         self._conn.execute("DELETE FROM folder_tags WHERE folder_path=?", (folder_path,))
-        for tid in expanded:
+        for tid in ids:
             self._conn.execute(
-                "INSERT INTO folder_tags (folder_path, tag_id) VALUES (?,?)", (folder_path, tid))
+                "INSERT OR IGNORE INTO folder_tags (folder_path, tag_id) VALUES (?,?)",
+                (folder_path, tid))
         self._conn.commit()
 
 
@@ -495,68 +472,17 @@ class Store:
                 names.add(r["parent_name"])
         return names
 
-    def orphan_tag_links(self):
-        """返回所有孤儿挂载：[(folder_path, parent_tag_id)]——文件挂了父级标签
-        但未挂该父级的任一子级（leafOnly 规则下无法通过 UI 管理）。"""
-        tags = self.all_tags()
-        parent_ids = {t["id"] for t in tags if any(x["parent_id"] == t["id"] for x in tags)}
-        if not parent_ids:
-            return []
-        kids_by_parent = {}
-        for t in tags:
-            kids_by_parent.setdefault(t["parent_id"], set()).add(t["id"])
-        rels = self._conn.execute("SELECT folder_path, tag_id FROM folder_tags").fetchall()
-        by_path = {}
-        for r in rels:
-            by_path.setdefault(r["folder_path"], set()).add(r["tag_id"])
-        out = []
-        for r in rels:
-            if r["tag_id"] in parent_ids:
-                kids = kids_by_parent.get(r["tag_id"], set())
-                if not (kids & by_path.get(r["folder_path"], set())):
-                    out.append((r["folder_path"], r["tag_id"]))
-        return out
-
-    def _clear_orphans(self, path_filter=None):
-        """通用孤儿清理：path_filter 为 None 清全部，否则只清匹配路径。
-        级联：删一层后祖辈可能暴露为新孤儿，循环直到无孤儿。返回清理条数。"""
-        total = 0
-        while True:
-            orphans = self.orphan_tag_links()
-            if path_filter:
-                orphans = [o for o in orphans if o[0] == path_filter]
-            if not orphans:
-                break
-            for path, tid in orphans:
-                self._conn.execute(
-                    "DELETE FROM folder_tags WHERE folder_path=? AND tag_id=?",
-                    (path, tid))
-                total += 1
-        self._conn.commit()
-        return total
-
-    def clear_orphan_tags(self):
-        """一键清理：移除所有孤儿挂载（父级标签上残留、无子级伴生的关联）。
-        级联清理：删除一层后其祖辈可能暴露为新孤儿，循环直到无孤儿。
-        返回清理总条数。不影响挂子级文件的祖先链。"""
-        return self._clear_orphans()
-
-    def clear_orphan_tags_for_path(self, folder_path):
-        """清理单个路径上的孤儿挂载（级联）。返回清理条数。"""
-        folder_path = (folder_path or "").replace("\\", "/").rstrip("/")
-        return self._clear_orphans(folder_path)
-
     def append_folder_tags(self, folder_path, tag_ids):
-        """追加模式：在现有标签基础上追加 tag_ids（含祖先链），不删除已有。幂等。"""
+        """追加模式：在现有标签基础上追加 tag_ids（只存勾选，不物化祖先）。幂等。"""
         folder_path = folder_path.replace("\\", "/").rstrip("/")
         existing = {r["tag_id"] for r in self._conn.execute(
             "SELECT tag_id FROM folder_tags WHERE folder_path=?", (folder_path,))}
-        expanded = self._expand_ancestors(tag_ids)
-        new_ids = expanded - existing
-        for tid in new_ids:
-            self._conn.execute(
-                "INSERT INTO folder_tags (folder_path, tag_id) VALUES (?,?)",
-                (folder_path, tid))
+        for tid in tag_ids:
+            tid = int(tid)
+            if tid not in existing:
+                self._conn.execute(
+                    "INSERT OR IGNORE INTO folder_tags (folder_path, tag_id) VALUES (?,?)",
+                    (folder_path, tid))
         self._conn.commit()
 
     # ---------- 外部标签写入审核队列（v0.6.0 第 8 步） ----------
@@ -642,14 +568,23 @@ class Store:
         if old == new:
             return
         if migrate:
+            # 两段式：先 INSERT OR IGNORE 到新路径（防 UNIQUE 冲突），再删旧路径
             self._conn.execute(
-                "UPDATE folder_tags SET folder_path = ? || substr(folder_path, ?) "
+                "INSERT OR IGNORE INTO folder_tags (folder_path, tag_id, created_at) "
+                "SELECT ? || substr(folder_path, ?), tag_id, created_at FROM folder_tags "
                 "WHERE folder_path = ? OR folder_path LIKE ?",
                 (new, len(old) + 1, old, old + "/%"))
             self._conn.execute(
-                "UPDATE path_aliases SET path = ? || substr(path, ?) "
+                "DELETE FROM folder_tags WHERE folder_path = ? OR folder_path LIKE ?",
+                (old, old + "/%"))
+            self._conn.execute(
+                "INSERT OR IGNORE INTO path_aliases (path, alias, created_at) "
+                "SELECT ? || substr(path, ?), alias, created_at FROM path_aliases "
                 "WHERE path = ? OR path LIKE ?",
                 (new, len(old) + 1, old, old + "/%"))
+            self._conn.execute(
+                "DELETE FROM path_aliases WHERE path = ? OR path LIKE ?",
+                (old, old + "/%"))
         else:
             self._conn.execute(
                 "DELETE FROM folder_tags WHERE folder_path = ? OR folder_path LIKE ?",
