@@ -14,7 +14,20 @@ function tagsToJsTree(parentId) {
     icon: t.color ? 'jstree-color' : false,
     state: {opened: !collapsedTags.has(t.id), selected: currentTagIds.includes(t.id)},
     children: tagChildren(t.id).length ? tagsToJsTree(t.id) : [],
+    a_attr: t.pending ? {title: '待审核标签：接受前不计入计数', 'data-pending': '1'} : {},
   }));
+}
+
+// 标签树渲染后给待审核标签加视觉标记
+function stylePendingTags() {
+  if (!$) return;
+  $('#tag-tree .jstree-anchor').each(function () {
+    const a = $(this);
+    const node = $('#tag-tree').jstree(true).get_node(a.closest('li'));
+    if (!node || !node.a_attr || node.a_attr['data-pending'] !== '1') return;
+    if (a.find('.jstree-pending-tag').length) return;
+    a.append('<span class="jstree-pending-tag">⏳</span>');
+  });
 }
 
 function renderTagTree() {
@@ -125,8 +138,9 @@ function renderTagTree() {
       });
     }).on('ready.jstree', function () {
       styleTagColorDots();
+      stylePendingTags();
     }).on('refresh.jstree after_open.jstree', function () {
-      setTimeout(() => styleTagColorDots(), 0);
+      setTimeout(() => { styleTagColorDots(); stylePendingTags(); }, 0);
     });
     // 双击重命名（现代交互）
     $('#tag-tree').on('dblclick.jstree', '.jstree-anchor', function (e) {

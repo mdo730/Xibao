@@ -343,6 +343,8 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: #0b57d0
 /* ---- 文件树分隔线 & 快速访问条目 ---- */
 .tree-sep { border-top: 1px solid #e2e2e2; margin: 6px 10px; }
 .quick-tree-item .tree-label { color: #7a5c2e; font-weight: 500; }
+/* 待审核标签标记 */
+.jstree-pending-tag { margin-left: 4px; font-size: 11px; opacity: .8; cursor: help; }
 
 /* ---- QuickLook 预览 ---- */
 .quicklook-modal { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; z-index: 500; }

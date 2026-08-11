@@ -12,8 +12,10 @@ def api_tags():
     try:
         tags = store.all_tags()
         counts = store.tag_counts()
+        pending_names = store.pending_tag_names()
         for t in tags:
             t["count"] = counts.get(t["id"], 0)
+            t["pending"] = t["name"] in pending_names
         return jsonify({"ok": True, "tags": tags})
     finally:
         store.close()

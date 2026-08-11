@@ -464,6 +464,20 @@ class Store:
         self._conn.commit()
 
 
+    def pending_tag_names(self):
+        """返回所有被待审核记录引用的标签名集合（含父标签名）。
+        用于标签树标记"待审核"标签。"""
+        rows = self._conn.execute(
+            "SELECT DISTINCT tag_name, parent_name FROM pending_tag_applies "
+            "WHERE status='pending'").fetchall()
+        names = set()
+        for r in rows:
+            if r["tag_name"]:
+                names.add(r["tag_name"])
+            if r["parent_name"]:
+                names.add(r["parent_name"])
+        return names
+
     def orphan_tag_links(self):
         """返回所有孤儿挂载：[(folder_path, parent_tag_id)]——文件挂了父级标签
         但未挂该父级的任一子级（leafOnly 规则下无法通过 UI 管理）。"""

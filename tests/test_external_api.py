@@ -100,6 +100,20 @@ def test_review_clears_duplicate_rows(store):
     assert any(t["name"] == "重复标签" for t in tags)
 
 
+def test_pending_tag_names(store):
+    """待审核标签名集合：供标签树标记待审核节点。"""
+    store.add_pending_apply("D:/a.png", "新标签A", None, "s1")
+    store.add_pending_apply("D:/a.png", "子标签", "父标签", "s1")
+    names = store.pending_tag_names()
+    assert "新标签A" in names
+    assert "子标签" in names
+    assert "父标签" in names
+    # 审核后不再返回
+    items = store.list_pending_applies("pending")
+    store.review_pending([it["id"] for it in items], True)
+    assert store.pending_tag_names() == set()
+
+
 def test_review_multi_tag_file_clears_all(store):
     """同一文件挂了多个标签时，审核应清掉该文件全部 pending，不留文件残留。"""
     store.add_pending_apply("D:/a.png", "标签1", None, "s1")
