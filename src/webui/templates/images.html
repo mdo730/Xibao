@@ -282,6 +282,18 @@
       </div>
 
       <div class="settings-block">
+        <h4>🧹 清理无效挂载</h4>
+        <div style="margin-top:6px">
+          <button class="danger" onclick="cleanupInvalidMounts()">清理无效挂载</button>
+          <span id="set-cleanup-status" class="search-feedback"></span>
+        </div>
+        <p class="muted" style="margin-top:8px">
+          移除已不存在文件/文件夹上的标签与备注名（仅清理，不影响真实文件）。
+          为什么需要这个按钮：西煲删除文件时会自动清理标签，但如果文件被<strong>资源管理器或外部程序</strong>删除、移动，西煲可能不知道，导致标签树里的数量虚高（点进标签却找不到文件）。外接盘/网络盘拔掉时也会误报，请确认后再清理。
+        </p>
+      </div>
+
+      <div class="settings-block">
         <h4>🏷 标签备份</h4>
         <p class="muted">导出：将当前所有标签、备注名及文件关联保存为一个文件，方便备份或转移到其他电脑。</p>
         <div style="margin-top:6px">
@@ -400,6 +412,7 @@
       <p>· 新增：右键菜单位置约束——靠近屏幕底部/右侧时自动上移左移，不再超出显示范围</p>
       <p>· 新增：外部标签写入 API——插件/脚本可批量打标签，安全区目录限制范围，默认需人工审核</p>
       <p>· 新增：工具栏「🕓 待审核」——外部写入的标签先进队列，可逐条或批量接受/拒绝</p>
+      <p>· 新增：设置里「清理无效挂载」——文件被外部删除/移动后，一键清除残留的标签计数（标签树数量虚高时可点）</p>
     </details>
     <details>
       <summary>v0.5.5</summary>

@@ -152,6 +152,30 @@ def api_tags_orphans_clear_path():
         store.close()
 
 
+@tags_bp.post("/api/tags/cleanup-invalid")
+def api_tags_cleanup_invalid():
+    """清理无效挂载：移除已不存在文件的标签关联与备注名。
+    仅用于文件被外部程序删除/移动后残留的脏数据。"""
+    import os
+    store = Store()
+    try:
+        paths = store._conn.execute(
+            "SELECT DISTINCT folder_path FROM folder_tags").fetchall()
+        cleaned = 0
+        files = []
+        for r in paths:
+            p = r["folder_path"]
+            if not os.path.exists(p):
+                store._conn.execute("DELETE FROM folder_tags WHERE folder_path=?", (p,))
+                store._conn.execute("DELETE FROM path_aliases WHERE path=?", (p,))
+                files.append(p)
+                cleaned += 1
+        store._conn.commit()
+        return jsonify({"ok": True, "cleaned": cleaned, "files": files})
+    finally:
+        store.close()
+
+
 @tags_bp.get("/api/folders/<path:folder_path>/tags")
 def api_folder_tags(folder_path):
     store = Store()

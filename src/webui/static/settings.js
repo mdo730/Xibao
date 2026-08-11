@@ -157,6 +157,29 @@ async function saveExternalSecurity() {
   }
 }
 
+// ---- 清理无效挂载（外部删除/移动文件后残留的标签关联） ----
+async function cleanupInvalidMounts() {
+  if (!confirm('确定清理无效挂载吗？\n\n将移除已不存在文件/文件夹上的标签与备注名。\n\n注意：如果外接盘/网络盘当前未连接，其文件也会被误判为不存在，清理后重新连接也不会恢复。')) return;
+  const s = document.getElementById('set-cleanup-status');
+  if (s) { s.textContent = '⏳ 清理中…'; s.className = 'search-feedback'; }
+  try {
+    const r = await fetch('/api/tags/cleanup-invalid', {method: 'POST'});
+    const d = await r.json();
+    if (!d.ok) {
+      if (s) { s.textContent = '❌ ' + (d.error || '清理失败'); s.className = 'search-feedback fail'; }
+      return;
+    }
+    if (s) {
+      s.textContent = d.cleaned ? `✅ 已清理 ${d.cleaned} 个无效挂载` : '✅ 没有无效挂载';
+      s.className = 'search-feedback ok';
+    }
+    if (typeof loadTags === 'function') loadTags();
+    if (typeof refresh === 'function') refresh();
+  } catch (e) {
+    if (s) { s.textContent = '❌ 清理失败: ' + e.message; s.className = 'search-feedback fail'; }
+  }
+}
+
 // ---- 帮助浮窗（可拖动、可关闭） ----
 function openHelpFloat(center) {
   const f = document.getElementById('help-float');
