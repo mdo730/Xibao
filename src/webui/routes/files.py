@@ -209,10 +209,21 @@ def api_file_text():
 
 @files_bp.get("/api/filetree")
 def api_filetree():
-    """Win11 风格文件树：此电脑 → 盘符（惰性，子目录点击时再加载）。"""
+    """Win11 风格文件树：系统已知文件夹 + 盘符（惰性，子目录点击时再加载）。"""
     from ...images import library as lib
-    drives = lib._drive_list()
+    from ...images import known_folders
     tree = []
+    # 系统已知文件夹（桌面/下载/图片等，OneDrive 重定向自动处理）
+    icon_map = {"Desktop": "🖥", "Downloads": "⬇", "Pictures": "🖼", "Videos": "🎬",
+                "Documents": "📄", "Music": "🎵", "Profile": "👤", "Public": "👥",
+                "ProgramData": "🗂"}
+    for name, p in known_folders.known_folder_entries().items():
+        if name not in icon_map or name == "Profile":
+            continue
+        tree.append({"key": p, "name": f"{icon_map.get(name, '📁')} {name}", "path": p,
+                     "is_drive": False, "is_known": True, "children": []})
+    # 盘符
+    drives = lib._drive_list()
     for d in drives:
         tree.append({"key": d["path"], "name": d["name"] + (f" ({d['label']})" if d.get("label") else ""),
                      "path": d["path"], "is_drive": True, "children": []})
