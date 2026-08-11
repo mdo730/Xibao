@@ -87,26 +87,12 @@ def api_tag_move(tag_id):
             if new_parent_id == tag_id or new_parent_id in desc:
                 return jsonify({"ok": False, "error": "不能移动到自身或其子标签下"}), 400
         store.move_tag(tag_id, new_parent_id, order)
-        # 收集本次移动产生的孤儿：只统计 new_parent_id（被拖入的目标）下的
+        # 移动后统计被拖入目标标签下的孤儿挂载（供前端预警）
         orphans = []
         if new_parent_id:
             tags = {t["id"]: t for t in store.all_tags()}
-            kids = {x["id"] for x in tags.values() if x["parent_id"] == new_parent_id}
-            rels = store._conn.execute(
-                "SELECT DISTINCT folder_path FROM folder_tags WHERE tag_id=?",
-                (new_parent_id,)).fetchall()
-            for r in rels:
-                # 该文件是否挂了目标标签的任一子级
-                has_kid = False
-                for kid in kids:
-                    if store._conn.execute(
-                            "SELECT 1 FROM folder_tags WHERE folder_path=? AND tag_id=?",
-                            (r["folder_path"], kid)).fetchone():
-                        has_kid = True
-                        break
-                if not has_kid:
-                    orphans.append({"path": r["folder_path"],
-                                    "tag": tags[new_parent_id]["name"]})
+            orphans = [{"path": p, "tag": tags[tid]["name"]}
+                       for p, tid in store.orphan_tag_links() if tid == new_parent_id]
         return jsonify({"ok": True, "orphans": orphans})
     finally:
         store.close()

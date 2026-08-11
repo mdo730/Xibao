@@ -360,25 +360,48 @@ class Store:
         return [dict(r) for r in self._conn.execute(
             "SELECT * FROM image_tags ORDER BY parent_id, sort_order, id").fetchall()]
 
-    def sync_all_ancestors(self):
-        """全量修复：为所有文件补齐缺失的祖先链关联（挂子级必带父级）。
-        用于修复历史数据（拖动标签改层级前的旧挂载）。返回补条数。"""
-        paths = [r["folder_path"] for r in self._conn.execute(
-            "SELECT DISTINCT folder_path FROM folder_tags").fetchall()]
+    def _ancestor_map(self):
+        """构建 {tag_id: set(祖先id)}，一次性查全部，避免 N+1。"""
+        tags = self.all_tags()
+        parent_of = {t["id"]: t["parent_id"] for t in tags}
+        map_ = {}
+        for t in tags:
+            anc = set()
+            cur = t["parent_id"]
+            seen = set()
+            while cur and cur not in seen:
+                seen.add(cur)
+                anc.add(cur)
+                nxt = parent_of.get(cur)
+                if not nxt or nxt == cur:
+                    break
+                cur = nxt
+            map_[t["id"]] = anc
+        return map_
+
+    def _sync_ancestors_for_paths(self, paths, ancestor_map):
+        """为指定路径集合补齐缺失的祖先链关联（只增不删）。返回补条数。"""
         added = 0
         for path in paths:
             cur = {r["tag_id"] for r in self._conn.execute(
                 "SELECT tag_id FROM folder_tags WHERE folder_path=?", (path,)).fetchall()}
             to_add = set()
-            for tid in list(cur):
-                for anc in self._ancestors(tid):
-                    to_add.add(anc)
+            for tid in cur:
+                to_add |= ancestor_map.get(tid, set())
             new = cur | to_add
             for tid in new - cur:
                 self._conn.execute(
                     "INSERT INTO folder_tags (folder_path, tag_id) VALUES (?,?)",
                     (path, tid))
                 added += 1
+        return added
+
+    def sync_all_ancestors(self):
+        """全量修复：为所有文件补齐缺失的祖先链关联（挂子级必带父级）。
+        用于修复历史数据（拖动标签改层级前的旧挂载）。返回补条数。"""
+        paths = [r["folder_path"] for r in self._conn.execute(
+            "SELECT DISTINCT folder_path FROM folder_tags").fetchall()]
+        added = self._sync_ancestors_for_paths(paths, self._ancestor_map())
         self._conn.commit()
         return added
 
@@ -391,21 +414,7 @@ class Store:
         paths = [r["folder_path"] for r in self._conn.execute(
             f"SELECT DISTINCT folder_path FROM folder_tags WHERE tag_id IN ({q})",
             sub_ids).fetchall()]
-        for path in paths:
-            # 该文件当前挂的所有标签
-            cur = {r["tag_id"] for r in self._conn.execute(
-                "SELECT tag_id FROM folder_tags WHERE folder_path=?", (path,)).fetchall()}
-            # 补全这些标签的祖先链
-            to_add = set()
-            for tid in list(cur):
-                for anc in self._ancestors(tid):
-                    to_add.add(anc)
-            new = cur | to_add
-            # 只增不删（移动不该移除原有挂载）
-            for tid in new - cur:
-                self._conn.execute(
-                    "INSERT INTO folder_tags (folder_path, tag_id) VALUES (?,?)",
-                    (path, tid))
+        self._sync_ancestors_for_paths(paths, self._ancestor_map())
 
     def move_tag(self, tag_id, new_parent_id, order):
         """移动标签到新父级 + 指定同级位置。order 为 0-based 同级序号。
@@ -451,16 +460,20 @@ class Store:
         return [r["folder_path"] for r in rows]
 
 
-    def set_folder_tags(self, folder_path, tag_ids):
-        """把文件夹/文件的标签设为 tag_ids 集合（全量替换）。路径统一正斜杠。
-        自动补全祖先链：勾选子级时隐式带上所有父级标签。"""
-        folder_path = folder_path.replace("\\", "/").rstrip("/")
-        # 展开祖先链
+    def _expand_ancestors(self, tag_ids):
+        """展开祖先链：返回 tag_ids 及其全部祖先的 id 集合（含自身）。"""
         expanded = set()
         for tid in tag_ids:
             expanded.add(int(tid))
             for anc in self._ancestors(int(tid)):
                 expanded.add(anc)
+        return expanded
+
+    def set_folder_tags(self, folder_path, tag_ids):
+        """把文件夹/文件的标签设为 tag_ids 集合（全量替换）。路径统一正斜杠。
+        自动补全祖先链：勾选子级时隐式带上所有父级标签。"""
+        folder_path = folder_path.replace("\\", "/").rstrip("/")
+        expanded = self._expand_ancestors(tag_ids)
         self._conn.execute("DELETE FROM folder_tags WHERE folder_path=?", (folder_path,))
         for tid in expanded:
             self._conn.execute(
@@ -504,13 +517,14 @@ class Store:
                     out.append((r["folder_path"], r["tag_id"]))
         return out
 
-    def clear_orphan_tags(self):
-        """一键清理：移除所有孤儿挂载（父级标签上残留、无子级伴生的关联）。
-        级联清理：删除一层后其祖辈可能暴露为新孤儿，循环直到无孤儿。
-        返回清理总条数。不影响挂子级文件的祖先链。"""
+    def _clear_orphans(self, path_filter=None):
+        """通用孤儿清理：path_filter 为 None 清全部，否则只清匹配路径。
+        级联：删一层后祖辈可能暴露为新孤儿，循环直到无孤儿。返回清理条数。"""
         total = 0
         while True:
             orphans = self.orphan_tag_links()
+            if path_filter:
+                orphans = [o for o in orphans if o[0] == path_filter]
             if not orphans:
                 break
             for path, tid in orphans:
@@ -521,33 +535,23 @@ class Store:
         self._conn.commit()
         return total
 
+    def clear_orphan_tags(self):
+        """一键清理：移除所有孤儿挂载（父级标签上残留、无子级伴生的关联）。
+        级联清理：删除一层后其祖辈可能暴露为新孤儿，循环直到无孤儿。
+        返回清理总条数。不影响挂子级文件的祖先链。"""
+        return self._clear_orphans()
+
     def clear_orphan_tags_for_path(self, folder_path):
         """清理单个路径上的孤儿挂载（级联）。返回清理条数。"""
         folder_path = (folder_path or "").replace("\\", "/").rstrip("/")
-        total = 0
-        while True:
-            orphans = self.orphan_tag_links()
-            hit = [o for o in orphans if o[0] == folder_path]
-            if not hit:
-                break
-            for _p, tid in hit:
-                self._conn.execute(
-                    "DELETE FROM folder_tags WHERE folder_path=? AND tag_id=?",
-                    (folder_path, tid))
-                total += 1
-        self._conn.commit()
-        return total
+        return self._clear_orphans(folder_path)
 
     def append_folder_tags(self, folder_path, tag_ids):
         """追加模式：在现有标签基础上追加 tag_ids（含祖先链），不删除已有。幂等。"""
         folder_path = folder_path.replace("\\", "/").rstrip("/")
         existing = {r["tag_id"] for r in self._conn.execute(
             "SELECT tag_id FROM folder_tags WHERE folder_path=?", (folder_path,))}
-        expanded = set()
-        for tid in tag_ids:
-            expanded.add(int(tid))
-            for anc in self._ancestors(int(tid)):
-                expanded.add(anc)
+        expanded = self._expand_ancestors(tag_ids)
         new_ids = expanded - existing
         for tid in new_ids:
             self._conn.execute(
