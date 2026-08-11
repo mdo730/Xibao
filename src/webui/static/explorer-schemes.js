@@ -233,6 +233,7 @@ function applyScheme(idx) {
   if (!s) return;
   currentTagIds = (s.tags || []).slice();
   currentPath = '';
+  navToTag(currentTagIds);
   // 进入筛选模式展示多选集合 + chips
   _filterMode = true;
   const btn = document.getElementById('btn-filter-mode');

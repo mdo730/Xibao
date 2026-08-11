@@ -75,47 +75,57 @@ function relUrl(p) {
 function encPath(p) { return p.replace(/\\/g, '/').split('/').filter(Boolean).map(encodeURIComponent).join('/'); }
 
 // ---- 导航 ----
-// 历史 = 去过的位置列表；navIdx 指向当前显示的位置（navHist[navIdx] === currentPath）
+// 历史 = 视图快照列表；navIdx 指向当前显示的快照。
+// 每个快照 = {path, tagIds}（目录 + 筛选标签），目录与筛选共用同一返回栈。
+function _sameView(a, b) {
+  if (!a || !b) return false;
+  if (a.path !== b.path) return false;
+  if ((a.tagIds || []).length !== (b.tagIds || []).length) return false;
+  const sa = (a.tagIds || []).slice().sort();
+  const sb = (b.tagIds || []).slice().sort();
+  return sa.every((v, i) => v === sb[i]);
+}
+function _applyView(v) {
+  currentPath = v.path || '';
+  currentTagIds = (v.tagIds || []).slice();
+  refresh();
+  if (typeof updateTagActive === 'function') updateTagActive();
+  if (typeof expandToPath === 'function' && currentPath) expandToPath(currentPath);
+}
+function _pushView(path, tagIds) {
+  const cur = navIdx >= 0 ? navHist[navIdx] : null;
+  const v = {path: path || '', tagIds: (tagIds || []).slice()};
+  if (_sameView(cur, v)) return;  // 去重：与当前一致不推
+  navHist = navHist.slice(0, navIdx + 1);
+  navHist.push(v);
+  navIdx = navHist.length - 1;
+  if (navHist.length > 100) { navHist.shift(); navIdx--; }
+}
 function navTo(path) {
   // 统一正斜杠，保证历史/比较一致
   if (path) path = path.replace(/\\/g, '/');
   // 目标已在历史中 → 直接跳回该位置（避免重复条目）
-  const exist = navHist.indexOf(path);
+  const exist = navHist.findIndex(h => h.path === path);
   if (exist >= 0) {
     navIdx = exist;
-    currentPath = path;
-    currentTagIds = [];
-    refresh();
+    _applyView(navHist[exist]);
     return;
   }
-  // 当前位置若不在栈顶，先压入当前位置（作为来路）
-  if (!(navIdx >= 0 && navHist[navIdx] === currentPath)) {
-    navHist = navHist.slice(0, navIdx + 1);
-    navHist.push(currentPath);
-    navIdx = navHist.length - 1;
-  }
-  // 前进到新位置
-  navHist.push(path);
-  navIdx = navHist.length - 1;
-  currentPath = path;
-  currentTagIds = [];
-  refresh();
+  // 进目录 = 清空筛选（产品决策：目录是无筛选的物理位置浏览）
+  _pushView(path, []);
+  _applyView({path, tagIds: []});
 }
 function navBack() {
-  // 回到上一个位置（navIdx 前移，指向上一站）
+  // 回到上一个视图（navIdx 前移，恢复其 path + tagIds）
   if (navIdx > 0) {
     navIdx--;
-    currentPath = navHist[navIdx];
-    currentTagIds = [];
-    refresh();
+    _applyView(navHist[navIdx]);
   }
 }
 function navForward() {
   if (navIdx < navHist.length - 1) {
     navIdx++;
-    currentPath = navHist[navIdx];
-    currentTagIds = [];
-    refresh();
+    _applyView(navHist[navIdx]);
   }
 }
 function navUp() {
@@ -131,6 +141,10 @@ function navUp() {
   let upper = p.replace(/[\\/][^\\/]*$/, '').replace(/\\/g, '/');
   if (/^[A-Za-z]:$/.test(upper)) upper += '/';  // C: → C:/
   navTo(upper);
+}
+// 标签筛选变化时进历史：保持当前目录，记录新的 tagIds
+function navToTag(tagIds) {
+  _pushView(currentPath, tagIds);
 }
 function openFolder(rel) { navTo(rel); }
 

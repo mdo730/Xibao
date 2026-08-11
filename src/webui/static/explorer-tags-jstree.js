@@ -198,6 +198,7 @@ function selectTag(tagId) {
   // 正常模式：单标签筛选（替换）
   currentTagIds = [tagId];
   currentPath = '';
+  navToTag(currentTagIds);
   refresh(); updateTagActive(); renderFilterChips();
 }
 // 筛选模式：toggle 加入/移出。加入时清理同链冲突（保留更深），避免"父+子"冗余
@@ -213,6 +214,7 @@ function filterTag(tagId) {
     currentTagIds = [...currentTagIds, tagId];
   }
   currentPath = '';
+  navToTag(currentTagIds);
   refresh(); updateTagActive(); renderFilterChips();
 }
 // 判断 a 是否为 b 的祖先（沿父链向上找）
@@ -230,7 +232,7 @@ function isAncestorOf(a, b) {
   return false;
 }
 function clearTagFilter() {
-  currentTagIds = []; currentPath = ''; refresh(); updateTagActive(); renderFilterChips();
+  currentTagIds = []; currentPath = ''; navToTag([]); refresh(); updateTagActive(); renderFilterChips();
 }
 
 // 书签按钮：切换筛选模式
