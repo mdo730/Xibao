@@ -178,6 +178,15 @@ class Store:
         return [dict(r) for r in self._conn.execute(
             "SELECT * FROM image_tags ORDER BY parent_id, id").fetchall()]
 
+    def tag_counts(self):
+        """返回 {tag_id: 条数}。因 set_folder_tags 物化祖先链（挂子级自动带父级），
+        每个标签的 DISTINCT 路径数天然等于"含子孙总数"，无需递归归并。"""
+        result = {}
+        for row in self._conn.execute(
+                "SELECT tag_id, COUNT(DISTINCT folder_path) c FROM folder_tags GROUP BY tag_id"):
+            result[row["tag_id"]] = row["c"]
+        return result
+
     def tag_folders(self, tag_id):
         """返回挂在该标签（含子标签）下的文件夹路径集合。"""
         ids = self._descendants(tag_id)
@@ -206,9 +215,11 @@ class Store:
 
 
     def remove_tags_for_path(self, path):
-        """删除某真实路径（文件或文件夹）的所有标签关联。路径统一正斜杠。"""
+        """删除某真实路径（文件或文件夹）的所有标签关联、备注名。
+        路径统一正斜杠。"""
         path = path.replace("\\", "/").rstrip("/")
         self._conn.execute("DELETE FROM folder_tags WHERE folder_path=?", (path,))
+        self._conn.execute("DELETE FROM path_aliases WHERE path=?", (path,))
         self._conn.commit()
 
     def move_tags(self, old_path, new_path, migrate=True):

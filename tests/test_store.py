@@ -265,3 +265,32 @@ def test_alias_clear_all(store):
     store.clear_all_aliases()
     assert store.all_aliases() == {}
     assert store.get_alias("C:/a") is None
+
+
+# ---------- 标签数量 ----------
+
+def test_tag_counts_with_descendants(store):
+    a = store.add_tag("工作")
+    b = store.add_tag("项目A", a)
+    c = store.add_tag("会议", b)
+    store.set_folder_tags("C:/p1", [a])
+    store.set_folder_tags("C:/p2", [b])
+    store.set_folder_tags("C:/p3", [b])
+    store.set_folder_tags("C:/p4", [c])
+    store.set_folder_tags("C:/p5", [c])
+    store.set_folder_tags("C:/p6", [c])
+    counts = store.tag_counts()
+    # 物化祖先链：挂 c 的路径也带 b、a；挂 b 的也带 a
+    # c 相关路径 p4~p6（3）；b 相关 p2~p6（5）；a 相关 p1~p6（6）
+    assert counts[c] == 3
+    assert counts[b] == 5
+    assert counts[a] == 6
+
+
+def test_tag_counts_dedupe_paths(store):
+    a = store.add_tag("工作")
+    b = store.add_tag("项目A", a)
+    store.set_folder_tags("C:/p1", [b])  # 自动带 a，但路径去重
+    counts = store.tag_counts()
+    assert counts[a] == 1
+    assert counts[b] == 1

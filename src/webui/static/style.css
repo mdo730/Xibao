@@ -122,6 +122,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: #0b57d0
 .ctx-key { float: right; color: #999; font-size: 11px; margin-left: 14px; }
 .alias-name { display: inline-block; padding: 0 3px; border-radius: 3px; }
 .alias-mode-btn { min-width: 88px; }
+.cell-content { position: relative; }
 
 /* ---- 忽略列表 ---- */
 #ignored-panel { margin-top: 14px; max-width: 640px; }

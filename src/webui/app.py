@@ -1,4 +1,4 @@
-﻿"""WebUI：Flask 应用。
+"""WebUI：Flask 应用。
 
 用法：
     python -m src.webui.app [--port 8788]
@@ -46,7 +46,7 @@ def images_page():
 @app.get("/api/health")
 def api_health():
     """健康探测：带唯一标记，用于残留进程识别（启动时）。"""
-    return jsonify({"ok": True, "app": "xibao", "version": "0.5.4"})
+    return jsonify({"ok": True, "app": "xibao", "version": "0.5.5"})
 
 
 @app.get("/api/help-seen")
@@ -132,7 +132,7 @@ def api_images():
                 store.close()
         else:
             data = lib.list_dir(path, limit=limit)
-        # 注入备注名（一次性查映射，避免逐条 N+1）
+                # 注入备注名（一次性查映射，避免逐条 N+1）
         store = Store()
         try:
             aliases = store.all_aliases()
@@ -163,7 +163,11 @@ def _path_card(p):
 def api_tags():
     store = Store()
     try:
-        return jsonify({"ok": True, "tags": store.all_tags()})
+        tags = store.all_tags()
+        counts = store.tag_counts()
+        for t in tags:
+            t["count"] = counts.get(t["id"], 0)
+        return jsonify({"ok": True, "tags": tags})
     finally:
         store.close()
 

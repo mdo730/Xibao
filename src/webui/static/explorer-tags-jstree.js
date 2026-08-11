@@ -9,7 +9,7 @@ function tagName(tid) { const t = allTags.find(x => x.id === tid); return t ? t.
 function tagsToJsTree(parentId) {
   return tagChildren(parentId).map(t => ({
     id: 'tag_' + t.id,
-    text: t.name,
+    text: (t.count != null && t.count > 0) ? `${t.name} (${t.count})` : t.name,
     li_attr: {'data-tag-id': t.id},
     icon: t.color ? 'jstree-color' : false,
     state: {opened: !collapsedTags.has(t.id), selected: currentTagIds.includes(t.id)},

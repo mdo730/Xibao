@@ -708,6 +708,7 @@ function closeAliasModal() {
   modalHide(document.getElementById('alias-modal'));
   aliasModalPath = null;
 }
+
 function ctxOpenFolder() {
   hideContextMenus();
   if (!ctxItem) return;
