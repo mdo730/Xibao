@@ -560,6 +560,11 @@ function updateMarquee() {
     if (overlap && el.dataset.key) selected.add(el.dataset.key);
     el.classList.toggle('sel', selected.has(el.dataset.key));
   });
+  // 异常模式下同步底部操作栏的"已选 N 项"
+  if (typeof taskViewMode !== 'undefined' && taskViewMode === 'orphan' &&
+      typeof renderOrphanActionBar === 'function') {
+    renderOrphanActionBar();
+  }
 }
 initMarquee();
 
