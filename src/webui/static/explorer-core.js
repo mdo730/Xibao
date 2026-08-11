@@ -639,9 +639,13 @@ async function loadCtxTools(path) {
     positionCtxMenu(menu, rect.left, rect.top);
   } catch (e) { if (loading) loading.remove(); }
 }
-function ctxRunTool(key, path) {
+async function ctxRunTool(key, path) {
   hideContextMenus();
-  fetch('/api/tools/run', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({key, path})});
+  try {
+    const r = await fetch('/api/tools/run', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({key, path})});
+    const d = await r.json();
+    if (d.done) refresh();  // 解压类完成，刷新文件列表
+  } catch (e) { /* 忽略 */ }
 }
 function hideContextMenus() {
   document.getElementById('ctx-menu').classList.add('hidden');

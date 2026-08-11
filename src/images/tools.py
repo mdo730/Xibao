@@ -20,11 +20,17 @@ class ExternalTool:
     def to_dict(self):
         return {"key": self.key, "label": self.label}
 
-    def run(self, target, workdir=None):
+    def run(self, target, workdir=None, wait=False, timeout=30):
         argv = self.build_cmds(target, workdir)
         creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
         try:
-            return subprocess.Popen(argv, cwd=workdir, creationflags=creationflags)
+            p = subprocess.Popen(argv, cwd=workdir, creationflags=creationflags)
+            if wait:
+                try:
+                    p.wait(timeout=timeout)
+                except subprocess.TimeoutExpired:
+                    pass
+            return p
         except OSError as e:
             from ..common import log
             log.warning("外部工具执行失败 %s: %s", self.key, e)

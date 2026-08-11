@@ -282,7 +282,7 @@ def api_tools():
 
 @files_bp.post("/api/tools/run")
 def api_tools_run():
-    """执行某个工具动作。body: {key, path, workdir?}。后台线程执行，立即返回。"""
+    """执行某个工具动作。body: {key, path, workdir?}。解压类等待完成，其余后台执行。"""
     from ...images import tools
     data = request.get_json(force=True) or {}
     key = data.get("key") or ""
@@ -294,6 +294,11 @@ def api_tools_run():
     if not t:
         return jsonify({"ok": False, "error": "工具不可用"}), 400
     wd = workdir or os.path.dirname(path) or "."
+    # 解压类动作（key 含 extract）等待完成，前端可据此刷新文件列表
+    is_extract = "extract" in key
+    if is_extract:
+        t.run(path, wd, wait=True, timeout=60)
+        return jsonify({"ok": True, "done": True})
     import threading
     threading.Thread(target=t.run, args=(path, wd), daemon=True).start()
-    return jsonify({"ok": True})
+    return jsonify({"ok": True, "done": False})
