@@ -312,6 +312,9 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: #0b57d0
 .filetree-panel { width: 200px; background: #fff; border-right: 1px solid #e5e5e5; display: flex; flex-direction: column; flex-shrink: 0; position: relative; }
 .filetree-resizer { position: absolute; top: 0; right: -3px; width: 6px; height: 100%; cursor: col-resize; z-index: 5; }
 .filetree-resizer:hover { background: rgba(11, 87, 208, .15); }
+/* 标签树宽度拖拽（左缘） */
+.tag-resizer { position: absolute; top: 0; left: -3px; width: 6px; height: 100%; cursor: col-resize; z-index: 5; }
+.tag-resizer:hover { background: rgba(11, 87, 208, .15); }
 .filetree-panel.collapsed { width: 40px; }
 .filetree-panel.collapsed .file-tree, .filetree-panel.collapsed .search-input { display: none; }
 .search-input { margin: 6px 8px; width: calc(100% - 16px); }

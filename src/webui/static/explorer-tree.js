@@ -55,6 +55,41 @@ function initFileTreeResizer() {
 }
 initFileTreeResizer();
 
+// ---- 标签树宽度可拖拽（存 localStorage） ----
+const TAG_WIDTH_KEY = 'xibao_tag_width';
+function restoreTagWidth() {
+  const panel = document.getElementById('tag-panel');
+  if (!panel) return;
+  const saved = parseInt(localStorage.getItem(TAG_WIDTH_KEY) || '0', 10);
+  if (saved >= 180 && !panel.classList.contains('floating')) panel.style.width = saved + 'px';
+}
+function initTagResizer() {
+  const resizer = document.getElementById('tag-resizer');
+  const panel = document.getElementById('tag-panel');
+  if (!resizer || !panel) return;
+  restoreTagWidth();
+  resizer.addEventListener('mousedown', e => {
+    if (panel.classList.contains('floating')) return;  // 浮动模式不拖拽
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = panel.offsetWidth;
+    function move(ev) {
+      // 向右拖 = 变窄（标签树在右侧）
+      let w = startW - (ev.clientX - startX);
+      w = Math.max(180, Math.min(w, 420));
+      panel.style.width = w + 'px';
+    }
+    function up() {
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', up);
+      localStorage.setItem(TAG_WIDTH_KEY, panel.offsetWidth);
+    }
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+  });
+}
+initTagResizer();
+
 // 拖到文件树目录 → 移动（带确认，防误操作）
 async function handleDropOnTree(e, destPath) {
   const payload = e.dataTransfer.getData('text/plain');
