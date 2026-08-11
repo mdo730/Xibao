@@ -321,13 +321,20 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: #0b57d0
 /* ---- 外部写入审核列表 ---- */
 .pending-badge { display: inline-block; min-width: 16px; height: 16px; line-height: 16px; border-radius: 8px; background: #e5533d; color: #fff; font-size: 11px; text-align: center; padding: 0 4px; margin-left: 2px; }
 .pending-badge.hidden { display: none; }
-.review-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border-bottom: 1px solid #eee; }
-.review-item:hover { background: #fafafa; }
-.review-main { min-width: 0; flex: 1; }
-.review-path { font-size: 13px; font-weight: 600; word-break: break-all; }
-.review-tags { margin-top: 3px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+#btn-pending-review.active { background: #fff3e0; border-color: #ff9800; color: #e65100; }
+.review-banner { display: flex; align-items: center; gap: 12px; padding: 4px 14px; background: #fff8e1; border-bottom: 1px solid #ffd54f; font-size: 12px; line-height: 1.4; white-space: nowrap; overflow: hidden; }
+.review-banner-title { font-weight: 600; color: #e65100; }
+.review-banner-actions { margin-left: auto; display: flex; gap: 6px; flex-shrink: 0; }
+.review-banner-actions .mini { padding: 1px 8px; font-size: 11px; }
+.review-empty { grid-column: 1 / -1; text-align: center; padding: 60px 20px; color: #888; font-size: 14px; }
+.review-card { position: relative; }
+.review-card .cell-content { position: relative; }
+.review-card-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.review-card-meta { font-size: 11px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.review-card-actions { display: flex; gap: 6px; margin-top: 6px; }
+.review-card-actions .mini { flex: 1; }
+.review-card .cell-name { font-size: 12px; }
 .review-tag { display: inline-block; background: #eef2ff; color: #3a5bd9; border-radius: 4px; padding: 1px 8px; font-size: 12px; }
-.review-actions { display: flex; gap: 6px; flex-shrink: 0; }
 .mini.ok { background: #e8f5e9; color: #2e7d32; }
 .mini.ok:hover { background: #d5ecd7; }
 .mini.danger { background: #fdecea; color: #c62828; }

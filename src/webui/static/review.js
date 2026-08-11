@@ -1,5 +1,7 @@
 // ---- 外部写入待审核（v0.6.0 第 8 步）----
-let pendingItems = [];
+// 审核模式：点「待审核」进入审核视图，文件列表以缩略图卡片显示待审核文件
+let reviewMode = false;
+let pendingGroups = [];
 
 async function refreshPendingBadge() {
   try {
@@ -14,51 +16,117 @@ async function refreshPendingBadge() {
   } catch (e) { /* 忽略 */ }
 }
 
-async function openReviewModal() {
-  modalShow(document.getElementById('review-modal'));
-  const listEl = document.getElementById('review-list');
-  listEl.innerHTML = '<div class="muted" style="padding:20px;text-align:center">加载中…</div>';
-  try {
-    const r = await fetch('/api/v1/tags/pending');
-    const d = await r.json();
-    if (!d.ok) { listEl.innerHTML = '<div class="muted" style="padding:20px">加载失败</div>'; return; }
-    pendingItems = d.items || [];
-    renderReviewList();
-  } catch (e) {
-    listEl.innerHTML = '<div class="muted" style="padding:20px">加载失败: ' + e.message + '</div>';
+// 进入审核视图：切换标志并重新渲染文件列表
+function toggleReviewMode() {
+  reviewMode = !reviewMode;
+  if (reviewMode) {
+    enterReviewView();
+  } else {
+    exitReviewView();
   }
-}
-function closeReviewModal() {
-  modalHide(document.getElementById('review-modal'));
 }
 
-function renderReviewList() {
-  const listEl = document.getElementById('review-list');
-  const summary = document.getElementById('review-summary');
-  if (!pendingItems.length) {
-    listEl.innerHTML = '<div class="muted" style="padding:30px;text-align:center">没有待审核的写入 🎉</div>';
-    if (summary) summary.textContent = '';
+async function enterReviewView() {
+  const r = await fetch('/api/v1/tags/pending');
+  const d = await r.json();
+  if (!d.ok) { alert('加载待审核失败: ' + (d.error || '')); reviewMode = false; return; }
+  pendingGroups = d.items || [];
+  // 标记激活状态（高亮按钮）
+  const btn = document.getElementById('btn-pending-review');
+  if (btn) btn.classList.add('active');
+  // 渲染审核条 + 文件列表
+  renderReviewBanner();
+  renderReviewGrid();
+  if (typeof expandToPath === 'function') { /* 不展开文件树 */ }
+}
+
+function exitReviewView() {
+  reviewMode = false;
+  const btn = document.getElementById('btn-pending-review');
+  if (btn) btn.classList.remove('active');
+  const banner = document.getElementById('review-banner');
+  if (banner) banner.remove();
+  if (typeof refresh === 'function') refresh();
+}
+
+function renderReviewBanner() {
+  let banner = document.getElementById('review-banner');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'review-banner';
+    banner.className = 'review-banner';
+    // 插到 exp-left-main（文件树+主体）之前，通栏一行，不挤占文件列表
+    const main = document.querySelector('.exp-left-main');
+    if (main) main.parentNode.insertBefore(banner, main);
+    else {
+      const body = document.getElementById('explorer-body');
+      body.parentNode.insertBefore(banner, body);
+    }
+  }
+  banner.innerHTML = `<span class="review-banner-title">🕓 外部写入审核</span>
+    <span class="muted" id="review-banner-count">${pendingGroups.length} 个文件待审核</span>
+    <span class="review-banner-actions">
+      <button class="mini ok" onclick="reviewAll(true)">✅ 全部接受</button>
+      <button class="mini danger" onclick="reviewAll(false)">🗑 全部拒绝</button>
+      <button class="mini" onclick="toggleReviewMode()">✕ 退出</button>
+    </span>`;
+}
+
+// 审核视图：缩略图卡片（复用文件列表的缩略图逻辑）
+function renderReviewGrid() {
+  const grid = document.getElementById('item-grid');
+  if (!grid) return;
+  grid.className = 'grid-view';
+  grid.innerHTML = '';
+  if (!pendingGroups.length) {
+    grid.innerHTML = '<div class="review-empty"><div>没有待审核的写入 🎉</div><button class="mini" style="margin-top:12px" onclick="toggleReviewMode()">退出审核</button></div>';
     return;
   }
-  let html = '';
-  for (const it of pendingItems) {
-    const parent = it.parent_name ? it.parent_name + ' > ' : '';
-    html += `<div class="review-item" data-id="${it.id}">
-      <div class="review-main">
-        <div class="review-path" title="${escHtml(it.folder_path)}">${escHtml(it.folder_path)}</div>
-        <div class="review-tags">
-          <span class="review-tag">${escHtml(parent + it.tag_name)}</span>
-          <span class="muted" style="font-size:11px">来源: ${escHtml(it.source || 'external')}</span>
-        </div>
-      </div>
-      <div class="review-actions">
-        <button class="mini ok" onclick="reviewOne(${it.id}, true)">✅ 接受</button>
-        <button class="mini danger" onclick="reviewOne(${it.id}, false)">🗑 拒绝</button>
-      </div>
-    </div>`;
+  for (const g of pendingGroups) {
+    const card = document.createElement('div');
+    card.className = 'cell cell-file review-card';
+    card.dataset.path = g.path;
+    let display = '';
+    if (g.type === 'image') {
+      display = `<img class="cell-thumb" src="${relUrl(g.path)}" loading="lazy">`;
+    } else if (g.type === 'video') {
+      display = `<img class="cell-thumb video-thumb" src="/api/thumb?path=${encodeURIComponent(g.path)}&size=256" loading="lazy">`;
+    } else {
+      display = fileIconHtml(basename(g.path), 'cell-icon-img', 'cell-icon', iconOf('other'), g.path);
+    }
+    const tagsHtml = g.tags.map(t =>
+      `<span class="review-tag">${escHtml((t.parent ? t.parent + ' > ' : '') + t.name)}</span>`).join('');
+    const srcs = [...new Set(g.tags.map(t => t.source || 'external'))].join(',');
+    card.innerHTML = `
+      <div class="cell-content">${display}</div>
+      <div class="cell-name">${escHtml(basename(g.path))}</div>
+      <div class="review-card-tags">${tagsHtml || '<span class="muted">无标签</span>'}</div>
+      <div class="review-card-meta muted">来源: ${escHtml(srcs)}</div>
+      <div class="review-card-actions">
+        <button class="mini ok" onclick="reviewGroup('${escAttr(g.path)}', true)">✅ 接受</button>
+        <button class="mini danger" onclick="reviewGroup('${escAttr(g.path)}', false)">🗑 拒绝</button>
+      </div>`;
+    // 非图片缩略图失败 → 回退图标
+    if (g.type !== 'image') {
+      const vt = card.querySelector('.video-thumb, .doc-thumb');
+      if (vt) {
+        vt.onerror = () => {
+          const fallback = fileIconHtml(basename(g.path), 'cell-icon-img', 'cell-icon', iconOf('other'), g.path);
+          const cc = card.querySelector('.cell-content');
+          if (cc) cc.innerHTML = fallback;
+        };
+      }
+    }
+    grid.appendChild(card);
   }
-  listEl.innerHTML = html;
-  if (summary) summary.textContent = `共 ${pendingItems.length} 条待审核`;
+}
+
+function basename(p) {
+  return String(p || '').replace(/\\/g, '/').split('/').filter(Boolean).pop() || p;
+}
+
+function escAttr(s) {
+  return String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
 }
 
 function escHtml(s) {
@@ -66,39 +134,58 @@ function escHtml(s) {
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
 }
 
-async function reviewOne(id, accept) {
+// 按文件路径审核（该文件的所有待审核标签一起处理）
+async function reviewGroup(path, accept) {
+  // 从后端拿该路径对应的 pending id 列表
+  const r = await fetch('/api/v1/tags/pending');
+  const d = await r.json();
+  if (!d.ok) { alert('加载失败'); return; }
+  const ids = (d.items || []).filter(x => x.path === path).map(x => x.id);
+  if (!ids.length) { refreshReviewView(); return; }
   try {
-    const r = await fetch('/api/v1/tags/review', {method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ids: [id], accept})});
-    const d = await r.json();
-    if (!d.ok) { alert('操作失败: ' + (d.error || '')); return; }
-    pendingItems = pendingItems.filter(x => x.id !== id);
-    renderReviewList();
-    refreshPendingBadge();
+    const rr = await fetch('/api/v1/tags/review', {method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ids, accept})});
+    const dd = await rr.json();
+    if (!dd.ok) { alert('操作失败: ' + (dd.error || '')); return; }
+    refreshReviewView();
+    if (typeof loadTags === 'function') loadTags();
+  } catch (e) { alert('操作失败: ' + e.message); }
+}
+
+async function reviewAll(accept) {
+  const r = await fetch('/api/v1/tags/pending');
+  const d = await r.json();
+  if (!d.ok) return;
+  const ids = (d.items || []).map(x => x.id);
+  if (!ids.length) { refreshReviewView(); return; }
+  try {
+    const rr = await fetch('/api/v1/tags/review', {method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ids, accept})});
+    const dd = await rr.json();
+    if (!dd.ok) { alert('操作失败: ' + (dd.error || '')); return; }
+    refreshReviewView();
     if (typeof loadTags === 'function') loadTags();
     if (typeof refresh === 'function') refresh();
   } catch (e) { alert('操作失败: ' + e.message); }
 }
 
-async function reviewAll(accept) {
-  if (!pendingItems.length) return;
-  const ids = pendingItems.map(x => x.id);
-  try {
-    const r = await fetch('/api/v1/tags/review', {method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ids, accept})});
-    const d = await r.json();
-    if (!d.ok) { alert('操作失败: ' + (d.error || '')); return; }
-    pendingItems = [];
-    renderReviewList();
-    refreshPendingBadge();
-    if (typeof loadTags === 'function') loadTags();
-    if (typeof refresh === 'function') refresh();
-  } catch (e) { alert('操作失败: ' + e.message); }
+// 重新拉取并刷新审核视图
+async function refreshReviewView() {
+  const r = await fetch('/api/v1/tags/pending');
+  const d = await r.json();
+  if (!d.ok) return;
+  pendingGroups = d.items || [];
+  refreshPendingBadge();
+  if (reviewMode) {
+    renderReviewBanner();
+    renderReviewGrid();
+  }
 }
 
 async function clearReviewed() {
   try {
     await fetch('/api/v1/tags/pending/clear', {method: 'POST'});
+    refreshReviewView();
   } catch (e) { /* 忽略 */ }
 }
 

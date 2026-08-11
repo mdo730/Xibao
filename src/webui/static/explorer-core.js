@@ -312,6 +312,11 @@ function updateSelectionUI() {
 
 // ---- 数据加载 ----
 async function refresh() {
+  // 审核模式下不走正常加载，防止覆盖审核视图
+  if (typeof reviewMode !== 'undefined' && reviewMode) {
+    if (typeof renderReviewGrid === 'function') renderReviewGrid();
+    return;
+  }
   const params = new URLSearchParams();
   if (currentPath) params.set('path', currentPath);
   currentTagIds.forEach(t => params.append('tag_id', t));

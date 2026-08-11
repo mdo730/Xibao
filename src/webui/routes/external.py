@@ -173,13 +173,36 @@ def api_tags_apply():
 
 @external_bp.get("/api/v1/tags/pending")
 def api_pending():
-    """待审核队列。"""
+    """待审核队列（按文件路径分组，附缩略图所需信息）。"""
     store = Store()
     try:
+        items = store.list_pending_applies("pending")
+        groups = {}
+        for it in items:
+            g = groups.setdefault(it["folder_path"],
+                                  {"path": it["folder_path"], "tags": [], "id": it["id"]})
+            g["tags"].append({"name": it["tag_name"], "parent": it["parent_name"],
+                              "source": it["source"]})
+        # 附文件类型/是否存在于磁盘
+        for g in groups.values():
+            p = g["path"]
+            ext = (os.path.splitext(p)[1] or "").lower()
+            g["type"] = _ext_type(ext)
+            g["exists"] = os.path.exists(p)
         return jsonify({"ok": True, "count": store.pending_count(),
-                        "items": store.list_pending_applies("pending")})
+                        "items": list(groups.values())})
     finally:
         store.close()
+
+
+def _ext_type(ext):
+    img = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".psd", ".tif", ".tiff", ".ico", ".svg"}
+    vid = {".mp4", ".mkv", ".avi", ".mov", ".wmv", ".flv", ".webm", ".m4v"}
+    if ext in img:
+        return "image"
+    if ext in vid:
+        return "video"
+    return "other"
 
 
 @external_bp.post("/api/v1/tags/review")

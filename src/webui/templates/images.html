@@ -48,7 +48,7 @@
       </div>
     </span>
     <button class="mini alias-mode-btn" id="btn-alias-mode" onclick="toggleDisplayMode()" title="切换显示模式：文件名 / 备注名（快捷键 Q）"></button>
-    <button class="mini" id="btn-pending-review" onclick="openReviewModal()" title="外部写入待审核">
+    <button class="mini" id="btn-pending-review" onclick="toggleReviewMode()" title="外部写入待审核（进入审核视图）">
       🕓 待审核 <span class="pending-badge hidden" id="pending-badge">0</span>
     </button>
     <button class="mini" onclick="openSettingsModal()" title="设置">⚙️</button>
@@ -166,27 +166,6 @@
     <div class="modal-actions">
       <button class="ghost" onclick="closeTagColor()">取消</button>
       <button onclick="saveTagColor()">确定</button>
-    </div>
-  </div>
-</div>
-
-<!-- 外部写入审核弹窗 -->
-<div id="review-modal" class="modal hidden" onclick="if(event.target===this)closeReviewModal()">
-  <div class="modal-box" style="width:760px;max-width:94vw">
-    <div class="modal-head">
-      <h3>🕓 外部写入待审核</h3>
-      <span>
-        <button class="mini" onclick="reviewAll(true)" title="接受全部">✅ 全部接受</button>
-        <button class="mini" onclick="reviewAll(false)" title="拒绝全部">🗑 全部拒绝</button>
-        <button class="modal-x" onclick="closeReviewModal()" title="关闭">×</button>
-      </span>
-    </div>
-    <div class="settings-body" id="review-list" style="overflow-y:auto;flex:1;min-height:0;padding-right:6px">
-      <div class="muted" style="padding:20px;text-align:center">加载中…</div>
-    </div>
-    <div class="modal-actions">
-      <span class="muted" id="review-summary"></span>
-      <button class="mini" onclick="clearReviewed()" title="清空已审核的历史记录">清空已审核</button>
     </div>
   </div>
 </div>
