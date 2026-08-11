@@ -461,6 +461,40 @@ class Store:
         self._conn.commit()
 
 
+    def unmanageable_links(self):
+        """返回 [(folder_path, tag_id)]——文件挂了"当前是父级"的标签。
+        这些标签在编辑弹窗 leafOnly 规则下被禁用，文件无法通过 UI 管理该标签。
+        （重构后 folder_tags 只存勾选，此为唯一遗留的"异常挂载"。）"""
+        tags = self.all_tags()
+        parent_ids = {t["id"] for t in tags if any(x["parent_id"] == t["id"] for x in tags)}
+        if not parent_ids:
+            return []
+        rows = self._conn.execute(
+            "SELECT folder_path, tag_id FROM folder_tags").fetchall()
+        return [(r["folder_path"], r["tag_id"]) for r in rows if r["tag_id"] in parent_ids]
+
+    def clear_unmanageable_links(self):
+        """一键清理：移除所有"无法管理"的挂载（文件上的父级标签关联）。
+        返回清理条数。"""
+        links = self.unmanageable_links()
+        for path, tid in links:
+            self._conn.execute(
+                "DELETE FROM folder_tags WHERE folder_path=? AND tag_id=?",
+                (path, tid))
+        self._conn.commit()
+        return len(links)
+
+    def clear_unmanageable_for_path(self, folder_path):
+        """清理单个路径上"无法管理"的挂载。返回清理条数。"""
+        folder_path = (folder_path or "").replace("\\", "/").rstrip("/")
+        links = [o for o in self.unmanageable_links() if o[0] == folder_path]
+        for _p, tid in links:
+            self._conn.execute(
+                "DELETE FROM folder_tags WHERE folder_path=? AND tag_id=?",
+                (folder_path, tid))
+        self._conn.commit()
+        return len(links)
+
     def pending_tag_names(self):
         """返回所有被待审核记录引用的标签名集合（含父标签名）。
         用于标签树标记"待审核"标签。"""

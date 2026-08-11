@@ -171,3 +171,33 @@ def test_tag_counts_includes_descendants(store):
     counts = store.tag_counts()
     assert counts[a] == 1   # 工作 含子孙（项目A）→ 1 个文件
     assert counts[b] == 1
+
+
+def test_unmanageable_links(store):
+    """文件挂了当前是父级的标签 → 无法管理挂载。"""
+    parent = store.add_tag("图片")
+    child = store.add_tag("壁纸", parent)
+    # 文件直接挂父级"图片"（不物化，存勾选）
+    store.set_folder_tags("D:/a.png", [parent])
+    links = store.unmanageable_links()
+    assert ("D:/a.png", parent) in links
+    # 挂子级"壁纸"的文件：父级从未被写入，无异常
+    store.set_folder_tags("D:/b.png", [child])
+    links = store.unmanageable_links()
+    assert ("D:/b.png", parent) not in links
+    assert ("D:/b.png", child) not in links
+    # 一键清理
+    n = store.clear_unmanageable_links()
+    assert n == 1
+    assert store.unmanageable_links() == []
+    assert store.tags_for_folder("D:/a.png") == []
+
+
+def test_clear_unmanageable_for_path(store):
+    parent = store.add_tag("图片")
+    store.add_tag("壁纸", parent)
+    store.set_folder_tags("D:/a.png", [parent])
+    store.set_folder_tags("D:/b.png", [parent])
+    n = store.clear_unmanageable_for_path("D:/a.png")
+    assert n == 1
+    assert store.unmanageable_links() == [("D:/b.png", parent)]

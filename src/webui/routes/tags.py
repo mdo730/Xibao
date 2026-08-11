@@ -92,6 +92,46 @@ def api_tag_move(tag_id):
         store.close()
 
 
+@tags_bp.get("/api/tags/orphans")
+def api_tags_orphans():
+    """列出"无法管理"挂载：文件挂了当前是父级的标签（leafOnly 禁用，无法在弹窗取消）。"""
+    store = Store()
+    try:
+        links = store.unmanageable_links()
+        tags = {t["id"]: t for t in store.all_tags()}
+        items = [{"path": p, "tag_id": tid, "tag": tags[tid]["name"] if tid in tags else "?"}
+                 for p, tid in links]
+        return jsonify({"ok": True, "count": len(items), "items": items})
+    finally:
+        store.close()
+
+
+@tags_bp.post("/api/tags/orphans/clear")
+def api_tags_orphans_clear():
+    """一键清理"无法管理"挂载。"""
+    store = Store()
+    try:
+        n = store.clear_unmanageable_links()
+        return jsonify({"ok": True, "cleared": n})
+    finally:
+        store.close()
+
+
+@tags_bp.post("/api/tags/orphans/clear-path")
+def api_tags_orphans_clear_path():
+    """按路径清理"无法管理"挂载。"""
+    data = request.get_json(force=True) or {}
+    path = (data.get("path") or "").replace("\\", "/").rstrip("/")
+    if not path:
+        return jsonify({"ok": False, "error": "缺少路径"}), 400
+    store = Store()
+    try:
+        n = store.clear_unmanageable_for_path(path)
+        return jsonify({"ok": True, "cleared": n})
+    finally:
+        store.close()
+
+
 @tags_bp.post("/api/tags/cleanup-invalid")
 def api_tags_cleanup_invalid():
     """清理无效挂载：移除已不存在文件的标签关联与备注名。
