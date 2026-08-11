@@ -584,10 +584,29 @@ function showCtx(e, path, kind, type) {
   html += '<div class="ctx-sep"></div><div class="ctx-tools-loading muted" style="padding:6px 12px;font-size:12px;color:#999">外部工具…</div>';
   menu.innerHTML = html;
   menu.classList.remove('hidden');
-  menu.style.left = Math.min(e.clientX, window.innerWidth - 200) + 'px';
-  menu.style.top = Math.min(e.clientY, window.innerHeight - 240) + 'px';
+  positionCtxMenu(menu, e.clientX, e.clientY);
   // 异步加载外部工具动作（仅单选/目标为文件或文件夹时）
   if (selected.size <= 1) loadCtxTools(path);
+}
+// 右键菜单定位：避免超出视口（尤其靠近底部/右侧时上移/左移）
+function positionCtxMenu(menu, x, y) {
+  const margin = 8;
+  // 用 visibility 隐藏测量真实尺寸，避免 0,0 闪烁
+  const prevVis = menu.style.visibility;
+  menu.style.visibility = 'hidden';
+  menu.style.left = '0px';
+  menu.style.top = '0px';
+  const w = menu.offsetWidth;
+  const h = menu.offsetHeight;
+  let left = x;
+  let top = y;
+  if (left + w + margin > window.innerWidth) left = window.innerWidth - w - margin;
+  if (top + h + margin > window.innerHeight) top = window.innerHeight - h - margin;
+  left = Math.max(margin, left);
+  top = Math.max(margin, top);
+  menu.style.left = left + 'px';
+  menu.style.top = top + 'px';
+  menu.style.visibility = prevVis || 'visible';
 }
 // 加载外部工具动作到右键菜单
 async function loadCtxTools(path) {
@@ -602,6 +621,9 @@ async function loadCtxTools(path) {
       // 无工具：移除分隔线，菜单干净
       const sep = menu.querySelector('.ctx-sep');
       if (sep) sep.remove();
+      // 高度变化后重新定位
+      const rect = menu.getBoundingClientRect();
+      positionCtxMenu(menu, rect.left, rect.top);
       return;
     }
     const wrap = menu.querySelector('.ctx-sep');
@@ -612,6 +634,9 @@ async function loadCtxTools(path) {
       div.onclick = () => ctxRunTool(t.key, path);
       menu.insertBefore(div, null);
     });
+    // 工具加载后菜单变高，重新定位避免超界
+    const rect = menu.getBoundingClientRect();
+    positionCtxMenu(menu, rect.left, rect.top);
   } catch (e) { if (loading) loading.remove(); }
 }
 function ctxRunTool(key, path) {

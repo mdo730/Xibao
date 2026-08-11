@@ -71,6 +71,23 @@ def _find_winrar():
     return shutil.which("WinRAR")
 
 
+def _find_bandizip():
+    """Bandizip：注册表 HKLM\\SOFTWARE\\Bandizip 默认值 = 安装目录。"""
+    d = _reg_get(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Bandizip", "")
+    if not d:
+        d = _reg_get(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Bandizip", "", winreg.KEY_WOW64_32KEY)
+    if d:
+        p = os.path.join(d, "Bandizip.exe")
+        if os.path.isfile(p):
+            return p
+    for base in (os.environ.get("ProgramFiles", r"C:\Program Files"),
+                 os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")):
+        p = os.path.join(base, "Bandizip", "Bandizip.exe")
+        if os.path.isfile(p):
+            return p
+    return shutil.which("Bandizip")
+
+
 def _find_leproc():
     clsid = r"Software\Classes\CLSID\{C52B9871-E5E9-41FD-B84D-C5ACADBEC7AE}\InprocServer32"
     dll = _reg_get(winreg.HKEY_CURRENT_USER, clsid, "", winreg.KEY_WOW64_64KEY) or \
@@ -117,6 +134,14 @@ def detect_tools():
             "rar-extract-to-folder", "用 WinRAR 解压到同名单文件夹", wrar,
             lambda a, wd: [wrar, "x", "-y", "-ibck", a,
                            os.path.join(wd, _stem(a)) + os.sep]))
+    bdz = _find_bandizip()
+    if bdz:
+        tools.append(ExternalTool(
+            "bdz-extract-here", "用 Bandizip 解压到当前目录", bdz,
+            lambda a, wd: [bdz, "x", "-y", "-o:" + wd, a]))
+        tools.append(ExternalTool(
+            "bdz-extract-to-folder", "用 Bandizip 解压到同名单文件夹", bdz,
+            lambda a, wd: [bdz, "x", "-y", "-o:" + os.path.join(wd, _stem(a)), a]))
     le = _find_leproc()
     if le:
         tools.append(ExternalTool(
