@@ -408,11 +408,15 @@ class Store:
                     (path, tid))
 
     def move_tag(self, tag_id, new_parent_id, order):
-        """移动标签到新父级 + 指定同级位置。order 为 0-based 同级序号。"""
+        """移动标签到新父级 + 指定同级位置。order 为 0-based 同级序号。
+        防环：新父级不能是自身或自身的后代，否则抛 ValueError。"""
+        tag_id = int(tag_id)
         new_parent_id = int(new_parent_id or 0)
         order = int(order or 0)
-        # 不能把自己或自己的后代设为自己的父级（防环）
+        # 防环：不能把自己或自己的后代设为自己的父级
         if new_parent_id:
+            if new_parent_id == tag_id or new_parent_id in self._descendants(tag_id):
+                raise ValueError("不能移动到自身或其子标签下")
             self._conn.execute("UPDATE image_tags SET parent_id=? WHERE id=?",
                                (new_parent_id, tag_id))
         else:

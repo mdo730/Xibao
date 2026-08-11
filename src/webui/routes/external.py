@@ -135,6 +135,7 @@ def api_tags_apply():
                 results.append({"path": path, "ok": True, "applied": 0})
                 continue
             if sec["audit"]:
+                item_queued = 0
                 for t in tag_list:
                     name, parent = (t.get("name"), t.get("parent")) if isinstance(t, dict) else (t, None)
                     name = (name or "").strip()
@@ -142,7 +143,8 @@ def api_tags_apply():
                         continue
                     store.add_pending_apply(path, name, parent, source)
                     queued += 1
-                results.append({"path": path, "ok": True, "queued": len(tag_list)})
+                    item_queued += 1
+                results.append({"path": path, "ok": True, "queued": item_queued})
             else:
                 tag_ids = []
                 for t in tag_list:

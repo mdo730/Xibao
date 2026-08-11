@@ -1,9 +1,7 @@
 // ---- 打标签弹窗 ----
-let tagModalKind = 'folder';
 let tagModalMode = 'set';  // 'set'=覆盖编辑（单选），'add'=追加（多选）
 async function openTagModal(paths, kind, mode) {
   tagModalPaths = (Array.isArray(paths) ? paths : [paths]).map(p => p.replace(/\/+$/, ''));
-  tagModalKind = kind || 'folder';
   tagModalMode = mode || 'set';
   const isMulti = tagModalPaths.length > 1;
   document.getElementById('tag-modal-title').textContent = isMulti

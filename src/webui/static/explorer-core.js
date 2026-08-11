@@ -1,12 +1,10 @@
 // 西煲 - Win11 风格资源管理器
 const itemGrid = document.getElementById('item-grid');
 const addressText = document.getElementById('address-text');
-const tagTreeEl = document.getElementById('tag-tree');
 const fileTreeEl = document.getElementById('file-tree');
 
 let currentPath = '';
 let currentTagIds = [];
-let selectMode = false;
 const selected = new Set();
 let ctxItem = null;
 let tagCtxItem = null;
@@ -19,7 +17,6 @@ let allTags = [];
 let navHist = [];
 let navIdx = -1;
 const collapsedTags = new Set();
-const UNTAGGED_ID = -1;
 
 const TYPE_ICON = {folder:'📁', image:'🖼', video:'🎬', audio:'🎵', pdf:'📕', doc:'📄', archive:'🗜', code:'💻', other:'📄'};
 function iconOf(t) { return TYPE_ICON[t] || '📄'; }
@@ -169,7 +166,7 @@ function renderAddress() {
     acc = i === 0 ? seg : acc + '/' + seg;
     const isLast = i === parts.length - 1;
     // 盘符段（C:）特殊处理
-    const label = (seg.length === 2 && seg[1] === ':') ? seg : seg;
+    const label = seg;
     if (isLast) {
       html += `<span class="crumb crumb-last" title="${currentPath}">${label}</span>`;
     } else {
@@ -233,7 +230,6 @@ document.addEventListener('mousedown', e => {
 
 // 网格缩放（五档：50/75/100/125/150%）分段按钮
 const GRID_SIZES = ['45px', '68px', '90px', '112px', '135px'];
-const GRID_PERCENT = [50, 75, 100, 125, 150];
 function setGridSize(idx) {
   idx = parseInt(idx);
   if (isNaN(idx)) idx = 2;
@@ -261,11 +257,6 @@ function loadGridSize() {
   if (isNaN(idx)) idx = 2;
   if (idx < 0 || idx > 4) idx = 2;
   setGridSize(idx);
-}
-
-function toggleSel(key) {
-  if (selected.has(key)) selected.delete(key); else selected.add(key);
-  render();
 }
 
 let lastSelIndex = -1;   // 上次选中的条目索引（用于 Shift 范围）

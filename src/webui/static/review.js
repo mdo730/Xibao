@@ -39,6 +39,8 @@ async function refreshOrphanBadge() {
 
 // ---------- 模式切换 ----------
 
+let taskViewSeq = 0;  // 任务视图切换序号：防止 exitTaskView 的异步 refresh 覆盖新视图
+
 function toggleTaskView(mode) {
   if (taskViewMode === mode) {
     exitTaskView();
@@ -46,8 +48,10 @@ function toggleTaskView(mode) {
   }
   if (taskViewMode) exitTaskView();
   taskViewMode = mode;
-  if (mode === 'review') enterReviewView();
-  else enterOrphanView();
+  taskViewSeq++;
+  const seq = taskViewSeq;
+  if (mode === 'review') enterReviewView(seq);
+  else enterOrphanView(seq);
 }
 
 function toggleReviewMode() { toggleTaskView('review'); }
@@ -55,6 +59,7 @@ function toggleOrphanMode() { toggleTaskView('orphan'); }
 
 function exitTaskView() {
   taskViewMode = null;
+  taskViewSeq++;
   ['btn-pending-review', 'btn-tag-orphans'].forEach(id => {
     const b = document.getElementById(id);
     if (b) b.classList.remove('active');
@@ -64,9 +69,10 @@ function exitTaskView() {
   if (typeof refresh === 'function') refresh();
 }
 
-async function enterReviewView() {
+async function enterReviewView(seq) {
   const r = await fetch('/api/v1/tags/pending');
   const d = await r.json();
+  if (seq !== undefined && seq !== taskViewSeq) return;  // 已被切换/退出，丢弃
   if (!d.ok) { alert('加载待审核失败: ' + (d.error || '')); taskViewMode = null; return; }
   pendingGroups = d.items || [];
   const btn = document.getElementById('btn-pending-review');
@@ -75,9 +81,10 @@ async function enterReviewView() {
   renderTaskGrid();
 }
 
-async function enterOrphanView() {
+async function enterOrphanView(seq) {
   const r = await fetch('/api/tags/orphans');
   const d = await r.json();
+  if (seq !== undefined && seq !== taskViewSeq) return;  // 已被切换/退出，丢弃
   if (!d.ok) { alert('加载标签异常失败: ' + (d.error || '')); taskViewMode = null; return; }
   // 转成与待审核一致的分组结构：每个孤儿文件一组，tags 显示其孤儿父级标签
   pendingGroups = (d.items || []).map(it => ({
@@ -260,7 +267,7 @@ async function clearOrphans() {
     if (!d.ok) { alert('清理失败: ' + (d.error || '')); return; }
     alert('已清理 ' + d.cleared + ' 个孤儿挂载');
     refreshOrphanBadge();
-    if (taskViewMode === 'orphan') enterOrphanView();
+    if (taskViewMode === 'orphan') enterOrphanView(taskViewSeq);
     if (typeof loadTags === 'function') loadTags();
     if (typeof refresh === 'function') refresh();
   } catch (e) { alert('清理失败: ' + e.message); }
@@ -269,14 +276,17 @@ async function clearOrphans() {
 // ---------- 刷新 ----------
 
 async function refreshReviewView() {
+  const seq = taskViewSeq;
   if (taskViewMode === 'review') {
     const r = await fetch('/api/v1/tags/pending');
     const d = await r.json();
+    if (seq !== taskViewSeq) return;
     if (d.ok) pendingGroups = d.items || [];
     refreshPendingBadge();
   } else if (taskViewMode === 'orphan') {
     const r = await fetch('/api/tags/orphans');
     const d = await r.json();
+    if (seq !== taskViewSeq) return;
     if (d.ok) {
       pendingGroups = (d.items || []).map(it => ({
         path: it.path, type: _guessType(it.path), ids: [it.tag_id],

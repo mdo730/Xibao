@@ -216,7 +216,6 @@ function schemeColor() {
   // 复用 saveTagColor 逻辑，但改保存到方案
 }
 let schemeColorTarget = -1;
-function setSchemeColorTarget(idx) { schemeColorTarget = idx; }
 
 function schemeDelete() {
   hideContextMenus();

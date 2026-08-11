@@ -115,7 +115,7 @@ async function renderKnownFoldersSettingUI() {
       input.style.width = 'auto';
       input.onchange = saveKnownFoldersSetting;
       label.appendChild(input);
-      label.appendChild(document.createTextNode((KNOWN_LABELS[n.name] || n.name) + '  ' + n.path.replace(/\\/g, '\\')));
+      label.appendChild(document.createTextNode((KNOWN_LABELS[n.name] || n.name) + '  ' + n.path.replace(/\//g, '\\')));
       wrap.appendChild(label);
     });
   } catch (e) {
