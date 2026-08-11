@@ -81,22 +81,26 @@ async function enterReviewView(seq) {
   renderTaskGrid();
 }
 
-async function enterOrphanView(seq) {
-  const r = await fetch('/api/tags/orphans');
-  const d = await r.json();
-  if (seq !== undefined && seq !== taskViewSeq) return;  // 已被切换/退出，丢弃
-  if (!d.ok) { alert('加载标签异常失败: ' + (d.error || '')); taskViewMode = null; return; }
-  // 转成与待审核一致的分组结构：每个孤儿文件一组，tags 显示其孤儿父级标签
-  pendingGroups = (d.items || []).map(it => ({
+function _orphanToGroups(items) {
+  return (items || []).map(it => ({
     path: it.path,
     type: _guessType(it.path),
     ids: [it.tag_id],
     tags: [{name: it.tag, parent: null, source: '孤儿挂载'}],
   }));
+}
+
+async function enterOrphanView(seq) {
+  const r = await fetch('/api/tags/orphans');
+  const d = await r.json();
+  if (seq !== undefined && seq !== taskViewSeq) return;  // 已被切换/退出，丢弃
+  if (!d.ok) { alert('加载标签异常失败: ' + (d.error || '')); taskViewMode = null; return; }
+  pendingGroups = _orphanToGroups(d.items);
   const btn = document.getElementById('btn-tag-orphans');
   if (btn) btn.classList.add('active');
   renderTaskBanner();
   renderTaskGrid();
+  refreshOrphanBadge();
 }
 
 function _guessType(p) {
@@ -203,10 +207,8 @@ function escHtml(s) {
 // ---------- 待审核操作 ----------
 
 async function reviewGroup(path, accept) {
-  const r = await fetch('/api/v1/tags/pending');
-  const d = await r.json();
-  if (!d.ok) { alert('加载失败'); return; }
-  const g = (d.items || []).find(x => x.path === path);
+  // 直接用本地 pendingGroups 取 ids（不重复 fetch 整份队列）
+  const g = (pendingGroups || []).find(x => x.path === path);
   const ids = g ? (g.ids || [g.id]) : [];
   if (!ids.length) { refreshReviewView(); return; }
   try {
@@ -220,11 +222,8 @@ async function reviewGroup(path, accept) {
 }
 
 async function reviewAll(accept) {
-  const r = await fetch('/api/v1/tags/pending');
-  const d = await r.json();
-  if (!d.ok) return;
   const ids = [];
-  (d.items || []).forEach(x => { (x.ids || [x.id]).forEach(i => ids.push(i)); });
+  (pendingGroups || []).forEach(x => { (x.ids || [x.id]).forEach(i => ids.push(i)); });
   if (!ids.length) { refreshReviewView(); return; }
   try {
     const rr = await fetch('/api/v1/tags/review', {method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -242,13 +241,7 @@ async function reviewAll(accept) {
 async function removeOrphan(path) {
   if (!confirm('确定移除该文件上的孤儿父级标签吗？')) return;
   try {
-    // 找出该路径的孤儿 (path, tag_id) 对并移除
-    const r = await fetch('/api/tags/orphans');
-    const d = await r.json();
-    if (!d.ok) return;
-    const items = (d.items || []).filter(x => x.path === path);
-    if (!items.length) { refreshReviewView(); return; }
-    // 复用一键清理的后端：改为按路径清理——需要后端支持
+    // 直接按路径清理（后端 cleared=0 即无孤儿可清）
     const rr = await fetch('/api/tags/orphans/clear-path', {method: 'POST',
       headers: {'Content-Type': 'application/json'}, body: JSON.stringify({path})});
     const dd = await rr.json();
@@ -266,8 +259,8 @@ async function clearOrphans() {
     const d = await r.json();
     if (!d.ok) { alert('清理失败: ' + (d.error || '')); return; }
     alert('已清理 ' + d.cleared + ' 个孤儿挂载');
-    refreshOrphanBadge();
     if (taskViewMode === 'orphan') enterOrphanView(taskViewSeq);
+    else refreshOrphanBadge();
     if (typeof loadTags === 'function') loadTags();
     if (typeof refresh === 'function') refresh();
   } catch (e) { alert('清理失败: ' + e.message); }
@@ -287,12 +280,7 @@ async function refreshReviewView() {
     const r = await fetch('/api/tags/orphans');
     const d = await r.json();
     if (seq !== taskViewSeq) return;
-    if (d.ok) {
-      pendingGroups = (d.items || []).map(it => ({
-        path: it.path, type: _guessType(it.path), ids: [it.tag_id],
-        tags: [{name: it.tag, parent: null, source: '孤儿挂载'}],
-      }));
-    }
+    if (d.ok) pendingGroups = _orphanToGroups(d.items);
     refreshOrphanBadge();
   }
   if (taskViewMode) {
@@ -304,17 +292,11 @@ async function refreshReviewView() {
 refreshPendingBadge();
 refreshOrphanBadge();
 
-// 标签树刷新/变更后同步孤儿角标
+// 标签树刷新/拖动后同步孤儿角标（刷新可能产生新孤儿）
 document.addEventListener('DOMContentLoaded', function () {
   const tree = $('#tag-tree');
   if (tree && tree.length) {
     tree.on('refresh.jstree', function () { refreshOrphanBadge(); });
-  }
-});
-// 拖动标签移动（move_node）后同步孤儿角标——移动可能产生新孤儿
-document.addEventListener('DOMContentLoaded', function () {
-  const tree = $('#tag-tree');
-  if (tree && tree.length) {
     tree.on('move_node.jstree', function () { setTimeout(refreshOrphanBadge, 400); });
   }
 });
