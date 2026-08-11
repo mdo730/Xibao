@@ -189,24 +189,25 @@
       <div class="settings-block">
         <h4>🔍 搜索</h4>
         <p class="muted" id="set-search-status">检测中…</p>
-        <div style="margin-top:12px">
-          <button onclick="setConnectEverything()">连接 Everything</button>
-          <span class="help-tip" title="即使 Everything 之后才打开，点此按钮也能连上它的搜索引擎（毫秒级）。搜索时毫秒出结果。">?</span>
-          <span id="set-ev-status" class="search-feedback"></span>
-        </div>
-        <div style="margin-top:14px">
-          <button onclick="setBuildIndex()">构建本地索引</button>
-          <span class="help-tip" title="无需安装 Everything 也能搜索。点击后显示扫描进度，完成后毫秒级本地搜索。">?</span>
-          <span id="set-build-status" class="search-feedback"></span>
-          <div id="set-index-progress" class="progress-wrap hidden">
-            <div class="progress-bar"><div id="set-index-bar" class="progress-fill"></div></div>
-            <span id="set-index-text" class="muted">准备中…</span>
+        <div style="margin-top:12px;display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap">
+          <div style="min-width:0">
+            <button onclick="setConnectEverything()">连接 Everything</button>
+            <span class="help-tip" title="即使 Everything 之后才打开，点此按钮也能连上它的搜索引擎（毫秒级）。搜索时毫秒出结果。">?</span>
+            <span id="set-ev-status" class="search-feedback"></span>
+            <div style="margin-top:10px">
+              <button onclick="setBuildIndex()">构建本地索引</button>
+              <span class="help-tip" title="无需安装 Everything 也能搜索。点击后显示扫描进度，完成后毫秒级本地搜索。">?</span>
+              <span id="set-build-status" class="search-feedback"></span>
+              <div id="set-index-progress" class="progress-wrap hidden">
+                <div class="progress-bar"><div id="set-index-bar" class="progress-fill"></div></div>
+                <span id="set-index-text" class="muted">准备中…</span>
+              </div>
+            </div>
           </div>
-        </div>
-        <div class="muted" style="margin-top:12px">
-          搜索机制：<br>
-          ⚡ Everything 引擎（装了 Everything 并连接后启用）<br>
-          📁 本地索引引擎（内置，无需外部软件）
+          <div class="muted" style="font-size:12px;line-height:1.7">
+            ⚡ Everything 引擎（装了并连接后启用）<br>
+            📁 本地索引引擎（内置，无需外部软件）
+          </div>
         </div>
       </div>
 
@@ -229,54 +230,36 @@
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
             <span class="muted" style="font-size:12px">备份 / 恢复</span>
           </div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
             <button class="mini" onclick="exportTags()" title="导出：将当前所有标签、备注名及文件关联保存为一个文件，方便备份或转移到其他电脑">导出备份</button>
             <button class="mini" onclick="importTags()" title="导入：从备份文件恢复标签。选「确定」清空现有后替换，选「取消」合并保留现有标签">导入备份</button>
-            <span id="set-tags-status" class="search-feedback"></span>
-          </div>
-        </div>
-
-        <div style="margin-top:16px;padding-top:12px;border-top:1px solid #f0f0f0">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
             <button class="mini danger" onclick="cleanupInvalidMounts()">清理无效挂载</button>
             <span class="help-tip" title="移除已不存在文件/文件夹上的标签与备注名。西煲删除文件会自动清理标签，但资源管理器或外部程序删除/移动文件时西煲不知道，会导致标签树数量虚高（点进标签却找不到文件）。外接盘/网络盘拔掉时也会误报，确认后再清理。">?</span>
             <span id="set-cleanup-status" class="search-feedback"></span>
+            <span id="set-tags-status" class="search-feedback"></span>
           </div>
         </div>
       </div>
 
       <div class="settings-block">
         <h4>💊 筛选胶囊</h4>
-        <div style="margin-top:10px">
-          <div class="muted" style="margin-bottom:4px">显示位置：</div>
-          <button onclick="setChipsPos('tree')" class="mini" id="btn-chips-pos-tree">标签树顶</button>
-          <button onclick="setChipsPos('top')" class="mini" id="btn-chips-pos-top">地址栏下方</button>
-        </div>
-        <div style="margin-top:10px">
-          <div class="muted" style="margin-bottom:4px">尺寸：</div>
-          <button onclick="setChipsSize('sm')" class="mini" id="btn-chips-size-sm">小</button>
-          <button onclick="setChipsSize('md')" class="mini" id="btn-chips-size-md">中</button>
-          <button onclick="setChipsSize('lg')" class="mini" id="btn-chips-size-lg">大</button>
+        <div style="margin-top:10px;display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start">
+          <div>
+            <div class="muted" style="margin-bottom:4px">显示位置：</div>
+            <button onclick="setChipsPos('tree')" class="mini" id="btn-chips-pos-tree">标签树顶</button>
+            <button onclick="setChipsPos('top')" class="mini" id="btn-chips-pos-top">地址栏下方</button>
+          </div>
+          <div>
+            <div class="muted" style="margin-bottom:4px">尺寸：</div>
+            <button onclick="setChipsSize('sm')" class="mini" id="btn-chips-size-sm">小</button>
+            <button onclick="setChipsSize('md')" class="mini" id="btn-chips-size-md">中</button>
+            <button onclick="setChipsSize('lg')" class="mini" id="btn-chips-size-lg">大</button>
+          </div>
         </div>
       </div>
       </div>
 
       <div class="settings-col">
-      <div class="settings-block">
-        <h4>🔌 外部写入</h4>
-        <p class="muted" style="margin-bottom:8px">供插件/脚本批量写入标签，限安全区目录、默认人工审核。</p>
-        <div class="muted" style="margin-bottom:4px">安全区目录（逗号分隔）：</div>
-        <input type="text" id="set-allow-roots" placeholder="例如 D:/素材, E:/下载" style="width:100%">
-        <div style="margin-top:6px">
-          <button class="mini" onclick="saveExternalSecurity()">保存安全区</button>
-          <span id="set-ext-status" class="search-feedback"></span>
-        </div>
-        <label style="display:flex;align-items:center;gap:8px;margin-top:10px">
-          <input type="checkbox" id="set-ext-audit" style="width:auto" onchange="saveExternalSecurity()"> 外部写入需人工审核
-          <span class="help-tip" title="开启时，写入先进「🕓 待审核」队列，你在工具栏确认后才生效；关闭则直接写入。留空安全区 = 完全关闭外部写入。">?</span>
-        </label>
-      </div>
-
       <div class="settings-block">
         <h4>🗂 文件树</h4>
         <label style="display:flex;align-items:center;gap:8px;margin-top:6px">
@@ -288,15 +271,32 @@
       <div class="settings-block">
         <h4>📝 备注名</h4>
         <p class="muted">文件/文件夹可设「仅西煲内显示」的名称，不改真实文件名（选中后按 R 或右键设置）。</p>
-        <div style="margin-top:10px">
-          <div class="muted" style="margin-bottom:4px">备注名底色：</div>
-          <button class="mini" onclick="openAliasColorPalette()" id="btn-alias-color">调色板</button>
-          <span class="alias-color-swatch" id="alias-color-preview"></span>
+        <div style="margin-top:10px;display:flex;gap:24px;flex-wrap:wrap;align-items:center">
+          <div>
+            <span class="muted" style="margin-right:4px">底色：</span>
+            <button class="mini" onclick="openAliasColorPalette()" id="btn-alias-color">调色板</button>
+            <span class="alias-color-swatch" id="alias-color-preview"></span>
+          </div>
+          <div>
+            <button class="danger" onclick="clearAllAliases()">清除所有备注名</button>
+            <span class="help-tip" title="删除所有文件/文件夹的备注名，不可恢复（真实文件名不受影响）。显示模式：工具栏按钮或按 Q 切换「以文件名为主 / 以备注名为主」。">?</span>
+          </div>
         </div>
-        <div style="margin-top:14px">
-          <button class="danger" onclick="clearAllAliases()">清除所有备注名</button>
-          <span class="help-tip" title="删除所有文件/文件夹的备注名，不可恢复（真实文件名不受影响）。显示模式：工具栏按钮或按 Q 切换「以文件名为主 / 以备注名为主」。">?</span>
+      </div>
+
+      <div class="settings-block">
+        <h4>🔌 外部写入</h4>
+        <p class="muted" style="margin-bottom:8px">接口已预留，供插件/脚本批量写入标签（限安全区目录、默认人工审核）。</p>
+        <div class="muted" style="margin-bottom:4px">安全区目录（逗号分隔）：</div>
+        <input type="text" id="set-allow-roots" placeholder="例如 D:/素材, E:/下载" style="width:100%">
+        <div style="margin-top:6px">
+          <button class="mini" onclick="saveExternalSecurity()">保存安全区</button>
+          <span id="set-ext-status" class="search-feedback"></span>
         </div>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:10px">
+          <input type="checkbox" id="set-ext-audit" style="width:auto" onchange="saveExternalSecurity()"> 外部写入需人工审核
+          <span class="help-tip" title="开启时，写入先进「🕓 待审核」队列，你在工具栏确认后才生效；关闭则直接写入。留空安全区 = 完全关闭外部写入。">?</span>
+        </label>
       </div>
       </div>
 

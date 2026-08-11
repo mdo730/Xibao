@@ -108,10 +108,10 @@ async function renderKnownFoldersSettingUI() {
       .filter(Boolean);
     wrap.innerHTML = '';
     // 两列紧凑排列，只显示 emoji + 名字（不显示路径）
-    wrap.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:2px 16px';
+    wrap.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:0 16px';
     sorted.forEach(n => {
       const label = document.createElement('label');
-      label.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:12px;padding:2px 0;cursor:pointer';
+      label.style.cssText = 'display:flex;align-items:center;gap:5px;font-size:12px;padding:1px 0;cursor:pointer';
       const input = document.createElement('input');
       input.type = 'checkbox';
       input.dataset.name = n.name;
