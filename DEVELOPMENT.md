@@ -62,7 +62,10 @@ pystray（托盘）+ psutil + Pillow + av（PyAV，视频缩略图解码）。�
 - **v0.6.0 重构进行中**：
   - ✅ 第 1 步 模块解耦：app.py 按域拆 Blueprint（routes/tags, files, search, settings），API 路径不变，前端零改动
   - ✅ 第 2 步 数据库容错：`check_integrity`（PRAGMA integrity_check）+ `salvage_db`（逐表抢救）+ `snapshot_db`（Connection.backup 原子快照轮转）+ `ensure_healthy_db`（启动检测损坏自动恢复）；Store 默认路径启动时自动打快照到 `%APPDATA%\Xibao\data\snapshots\`
-- 下一步见 ROADMAP.md（第 3 步稳定文件标识 → 架构接口 → 收益项）
+  - ✅ 第 4 步 右键外部工具集成：`src/images/tools.py`（探测 7-Zip/WinRAR/Locale Emulator/Everything，纯 winreg 标准库）+ `/api/tools`（动作清单）+ `/api/tools/run`（后台执行）+ 前端右键菜单动态加载；参考 patool/ConEmu/LE 官方实现
+  - ⏸️ 第 3 步稳定文件标识、第 7 步层级重构：暂缓最后做（已存 ROADMAP + 提醒）
+  - 待做：第 5-11 步
+- 下一步见 ROADMAP.md
 - **工作原则**：实现前先检索 GitHub 找现成方案，能复用不重写；每完成一步 commit 留痕 + 更新接力文档
 
 ## v0.5.4 已实现（含从 v0.5.2/0.5.3 延续的改动）
