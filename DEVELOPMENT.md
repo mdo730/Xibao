@@ -73,8 +73,9 @@ pystray（托盘）+ psutil + Pillow + av（PyAV，视频缩略图解码）。�
   - ✅ 第 6 步 导航源抽象：`known_folders.py`（纯 ctypes 调 SHGetKnownFolderPath）+ `/api/filetree` 统一 Known Folders 与盘符；设置可开关/勾选系统文件夹；快速访问并入文件树
   - ✅ 第 8 步 开放外部标签写入 API：`src/webui/routes/external.py`（`POST /api/v1/tags/apply` + 安全区 + 审核队列）+ `pending_tag_applies` 表（v9）+ 前端「🕓 待审核」/「⚠️ 标签异常」统一缩略图视图（review.js）；参考 PhotoPrism FirstOrCreate 幂等
   - ✅ 连带增强：标签拖动排序持久化（sort_order v10 + move_tag + 祖先链同步 + 全量修复）、孤儿挂载检测/清理、设置「清理无效挂载」
+  - ✅ 第 7 步 层级展开重构：`folder_tags` 只存实际勾选（不物化祖先链）；查询期 `_flat_dict` 展开 + `tag_counts` 递归 CTE 含子孙计数；删除/移动标签零同步副作用；schema v11（物化数据规范化 + UNIQUE 索引）；孤儿功能移除
   - ✅ 第 9 步 标签筛选返回交互：`navHist/navIdx` 升级为 `{path, tagIds}` 视图快照（`_applyView`/`_pushView`），目录/标签筛选/清筛选共用返回栈，多标签每步进史、返回逐级回退；进目录=清空筛选
-  - ⏸️ 第 3 步稳定文件标识、第 7 步层级重构：暂缓最后做（已存 ROADMAP + 提醒）
+  - ⏸️ 第 3 步稳定文件标识：暂缓最后做（已存 ROADMAP + 提醒）
   - 待做：第 10-11 步（英文界面、增量更新）
 - 下一步见 ROADMAP.md
 - **工作原则**：实现前先检索 GitHub 找现成方案，能复用不重写；每完成一步 commit 留痕 + 更新接力文档
@@ -120,5 +121,5 @@ python build_package.py   # 一键：PyInstaller onedir + Inno Setup 安装包
 
 - 标签、搜索索引等：`%APPDATA%\Xibao\`（不依赖 exe 位置，升级/重装不碰）
 - 缩略图缓存：`%LOCALAPPDATA%\Xibao\thumbnails\`（`<md5>_<size>.jpg` + `.meta` 存 mtime/size 判失效）
-- schema 版本号 `SCHEMA_VERSION = 10`；改表结构必须登记 `_MIGRATIONS` 迁移函数（否则只升版本号会崩）
+- schema 版本号 `SCHEMA_VERSION = 11`；改表结构必须登记 `_MIGRATIONS` 迁移函数（否则只升版本号会崩）
 - 升级自动备份 `memory.db.bak`，迁移失败自动回滚
