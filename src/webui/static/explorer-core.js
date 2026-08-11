@@ -312,9 +312,9 @@ function updateSelectionUI() {
 
 // ---- 数据加载 ----
 async function refresh() {
-  // 审核模式下不走正常加载，防止覆盖审核视图
-  if (typeof reviewMode !== 'undefined' && reviewMode) {
-    if (typeof renderReviewGrid === 'function') renderReviewGrid();
+  // 任务视图（待审核/标签异常）下不走正常加载，防止覆盖任务视图
+  if (typeof taskViewMode !== 'undefined' && taskViewMode) {
+    if (typeof refreshReviewView === 'function') refreshReviewView();
     return;
   }
   const params = new URLSearchParams();

@@ -10,7 +10,7 @@ import sqlite3
 
 from ..common import appdata_dir, log
 
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 
 
 # 迁移表：旧版本 -> 迁移函数。新版本加表/列等结构变更时，在这里登记迁移函数。
@@ -27,8 +27,18 @@ def _migrate_v8_to_v9(conn):
         created_at TEXT DEFAULT (datetime('now','localtime')))""")
 
 
+def _migrate_v9_to_v10(conn):
+    """v10：标签加 sort_order 列（拖动排序用），默认按 id 顺序。"""
+    try:
+        conn.execute("SELECT sort_order FROM image_tags LIMIT 1").fetchone()
+    except Exception:
+        conn.execute("ALTER TABLE image_tags ADD COLUMN sort_order INTEGER")
+        conn.execute("UPDATE image_tags SET sort_order = id")
+
+
 _MIGRATIONS = {
     8: _migrate_v8_to_v9,
+    9: _migrate_v9_to_v10,
 }
 
 
@@ -173,6 +183,7 @@ class Store:
             name TEXT NOT NULL,
             parent_id INTEGER DEFAULT 0,
             color TEXT,
+            sort_order INTEGER,
             created_at TEXT DEFAULT (datetime('now','localtime')))""")
         c.execute("""CREATE TABLE IF NOT EXISTS folder_tags (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -260,8 +271,14 @@ class Store:
     # ---------- 标签树 ----------
 
     def add_tag(self, name, parent_id=0):
+        # sort_order 取同级最大值+1（追加到同级末尾）
+        row = self._conn.execute(
+            "SELECT COALESCE(MAX(sort_order), -1) + 1 AS so FROM image_tags WHERE parent_id=?",
+            (parent_id,)).fetchone()
+        so = row["so"] if row else 0
         cur = self._conn.execute(
-            "INSERT INTO image_tags (name, parent_id) VALUES (?,?)", (name, parent_id))
+            "INSERT INTO image_tags (name, parent_id, sort_order) VALUES (?,?,?)",
+            (name, parent_id, so))
         self._conn.commit()
         return cur.lastrowid
 
@@ -341,7 +358,75 @@ class Store:
 
     def all_tags(self):
         return [dict(r) for r in self._conn.execute(
-            "SELECT * FROM image_tags ORDER BY parent_id, id").fetchall()]
+            "SELECT * FROM image_tags ORDER BY parent_id, sort_order, id").fetchall()]
+
+    def sync_all_ancestors(self):
+        """全量修复：为所有文件补齐缺失的祖先链关联（挂子级必带父级）。
+        用于修复历史数据（拖动标签改层级前的旧挂载）。返回补条数。"""
+        paths = [r["folder_path"] for r in self._conn.execute(
+            "SELECT DISTINCT folder_path FROM folder_tags").fetchall()]
+        added = 0
+        for path in paths:
+            cur = {r["tag_id"] for r in self._conn.execute(
+                "SELECT tag_id FROM folder_tags WHERE folder_path=?", (path,)).fetchall()}
+            to_add = set()
+            for tid in list(cur):
+                for anc in self._ancestors(tid):
+                    to_add.add(anc)
+            new = cur | to_add
+            for tid in new - cur:
+                self._conn.execute(
+                    "INSERT INTO folder_tags (folder_path, tag_id) VALUES (?,?)",
+                    (path, tid))
+                added += 1
+        self._conn.commit()
+        return added
+
+    def _sync_ancestors_for_tree(self, tag_id):
+        """移动标签后同步：把所有挂了 tag_id 子树（含自身）的文件，补上这些标签
+        当前的新祖先链关联。确保"挂子级必带父级"的一致性（拖动改层级后计数不偏差）。"""
+        sub_ids = self._descendants(tag_id)
+        sub_ids.append(tag_id)
+        q = ",".join("?" * len(sub_ids))
+        paths = [r["folder_path"] for r in self._conn.execute(
+            f"SELECT DISTINCT folder_path FROM folder_tags WHERE tag_id IN ({q})",
+            sub_ids).fetchall()]
+        for path in paths:
+            # 该文件当前挂的所有标签
+            cur = {r["tag_id"] for r in self._conn.execute(
+                "SELECT tag_id FROM folder_tags WHERE folder_path=?", (path,)).fetchall()}
+            # 补全这些标签的祖先链
+            to_add = set()
+            for tid in list(cur):
+                for anc in self._ancestors(tid):
+                    to_add.add(anc)
+            new = cur | to_add
+            # 只增不删（移动不该移除原有挂载）
+            for tid in new - cur:
+                self._conn.execute(
+                    "INSERT INTO folder_tags (folder_path, tag_id) VALUES (?,?)",
+                    (path, tid))
+
+    def move_tag(self, tag_id, new_parent_id, order):
+        """移动标签到新父级 + 指定同级位置。order 为 0-based 同级序号。"""
+        new_parent_id = int(new_parent_id or 0)
+        order = int(order or 0)
+        # 不能把自己或自己的后代设为自己的父级（防环）
+        if new_parent_id:
+            self._conn.execute("UPDATE image_tags SET parent_id=? WHERE id=?",
+                               (new_parent_id, tag_id))
+        else:
+            self._conn.execute("UPDATE image_tags SET parent_id=0 WHERE id=?", (tag_id,))
+        # 重排目标父级下的兄弟顺序
+        sibs = [r["id"] for r in self._conn.execute(
+            "SELECT id FROM image_tags WHERE parent_id=? AND id != ? ORDER BY sort_order, id",
+            (new_parent_id, tag_id)).fetchall()]
+        sibs.insert(max(0, min(order, len(sibs))), tag_id)
+        for idx, tid in enumerate(sibs):
+            self._conn.execute("UPDATE image_tags SET sort_order=? WHERE id=?", (idx, tid))
+        # 同步祖先链：挂了被移动子树标签的文件补全新祖先
+        self._sync_ancestors_for_tree(tag_id)
+        self._conn.commit()
 
     def tag_counts(self):
         """返回 {tag_id: 条数}。因 set_folder_tags 物化祖先链（挂子级自动带父级），
@@ -378,6 +463,62 @@ class Store:
                 "INSERT INTO folder_tags (folder_path, tag_id) VALUES (?,?)", (folder_path, tid))
         self._conn.commit()
 
+
+    def orphan_tag_links(self):
+        """返回所有孤儿挂载：[(folder_path, parent_tag_id)]——文件挂了父级标签
+        但未挂该父级的任一子级（leafOnly 规则下无法通过 UI 管理）。"""
+        tags = self.all_tags()
+        parent_ids = {t["id"] for t in tags if any(x["parent_id"] == t["id"] for x in tags)}
+        if not parent_ids:
+            return []
+        kids_by_parent = {}
+        for t in tags:
+            kids_by_parent.setdefault(t["parent_id"], set()).add(t["id"])
+        rels = self._conn.execute("SELECT folder_path, tag_id FROM folder_tags").fetchall()
+        by_path = {}
+        for r in rels:
+            by_path.setdefault(r["folder_path"], set()).add(r["tag_id"])
+        out = []
+        for r in rels:
+            if r["tag_id"] in parent_ids:
+                kids = kids_by_parent.get(r["tag_id"], set())
+                if not (kids & by_path.get(r["folder_path"], set())):
+                    out.append((r["folder_path"], r["tag_id"]))
+        return out
+
+    def clear_orphan_tags(self):
+        """一键清理：移除所有孤儿挂载（父级标签上残留、无子级伴生的关联）。
+        级联清理：删除一层后其祖辈可能暴露为新孤儿，循环直到无孤儿。
+        返回清理总条数。不影响挂子级文件的祖先链。"""
+        total = 0
+        while True:
+            orphans = self.orphan_tag_links()
+            if not orphans:
+                break
+            for path, tid in orphans:
+                self._conn.execute(
+                    "DELETE FROM folder_tags WHERE folder_path=? AND tag_id=?",
+                    (path, tid))
+                total += 1
+        self._conn.commit()
+        return total
+
+    def clear_orphan_tags_for_path(self, folder_path):
+        """清理单个路径上的孤儿挂载（级联）。返回清理条数。"""
+        folder_path = (folder_path or "").replace("\\", "/").rstrip("/")
+        total = 0
+        while True:
+            orphans = self.orphan_tag_links()
+            hit = [o for o in orphans if o[0] == folder_path]
+            if not hit:
+                break
+            for _p, tid in hit:
+                self._conn.execute(
+                    "DELETE FROM folder_tags WHERE folder_path=? AND tag_id=?",
+                    (folder_path, tid))
+                total += 1
+        self._conn.commit()
+        return total
 
     def append_folder_tags(self, folder_path, tag_ids):
         """追加模式：在现有标签基础上追加 tag_ids（含祖先链），不删除已有。幂等。"""
@@ -542,7 +683,7 @@ class Store:
     def export_tags(self):
         """导出标签树、关联与备注名为可序列化 dict。"""
         tags = [dict(r) for r in self._conn.execute(
-            "SELECT id, name, parent_id FROM image_tags ORDER BY id").fetchall()]
+            "SELECT id, name, parent_id, sort_order FROM image_tags ORDER BY id").fetchall()]
         rels = [dict(r) for r in self._conn.execute(
             "SELECT folder_path, tag_id FROM folder_tags ORDER BY id").fetchall()]
         aliases = [dict(r) for r in self._conn.execute(
@@ -567,8 +708,8 @@ class Store:
             for t in tags:
                 parent = id_map.get(t.get("parent_id"))
                 cur = self._conn.execute(
-                    "INSERT INTO image_tags (name, parent_id) VALUES (?,?)",
-                    (t["name"], parent or 0))
+                    "INSERT INTO image_tags (name, parent_id, sort_order) VALUES (?,?,?)",
+                    (t["name"], parent or 0, t.get("sort_order") or 0))
                 id_map[t["id"]] = cur.lastrowid
             for r in rels:
                 tid = id_map.get(r["tag_id"])
@@ -591,8 +732,8 @@ class Store:
                     id_map[t["id"]] = cands[0]
                 else:
                     cur = self._conn.execute(
-                        "INSERT INTO image_tags (name, parent_id) VALUES (?,?)",
-                        (t["name"], parent or 0))
+                        "INSERT INTO image_tags (name, parent_id, sort_order) VALUES (?,?,?)",
+                        (t["name"], parent or 0, t.get("sort_order") or 0))
                     id_map[t["id"]] = cur.lastrowid
             for r in rels:
                 tid = id_map.get(r["tag_id"])

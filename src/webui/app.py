@@ -103,6 +103,27 @@ def _auto_backup():
         log.warning("标签自动备份失败: %s", e)
 
 
+def _fix_ancestors_once():
+    """启动时一次性修复历史数据的祖先链缺失（拖动改层级前的旧挂载）。"""
+    import os as _os
+    marker = appdata_dir("data", "meta_ancestors_fixed")
+    if _os.path.exists(marker):
+        return
+    try:
+        from ..memory.store import Store
+        store = Store()
+        try:
+            n = store.sync_all_ancestors()
+            if n:
+                log.info("已修复祖先链: 补全 %d 条关联", n)
+            with open(marker, "w", encoding="utf-8") as f:
+                f.write("1")
+        finally:
+            store.close()
+    except Exception as e:
+        log.warning("祖先链修复失败: %s", e)
+
+
 def main():
     ap = argparse.ArgumentParser(description="西煲")
     ap.add_argument("--port", type=int, default=8788)
@@ -118,6 +139,7 @@ def main():
     t.start()
 
     _auto_backup()
+    _fix_ancestors_once()
     log.info("西煲 WebUI 启动: http://127.0.0.1:%d", args.port)
 
     # 方案 B：打开系统浏览器访问 WebUI，保持后台运行

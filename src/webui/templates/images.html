@@ -48,8 +48,11 @@
       </div>
     </span>
     <button class="mini alias-mode-btn" id="btn-alias-mode" onclick="toggleDisplayMode()" title="切换显示模式：文件名 / 备注名（快捷键 Q）"></button>
-    <button class="mini" id="btn-pending-review" onclick="toggleReviewMode()" title="外部写入待审核（进入审核视图）">
+    <button class="mini" id="btn-pending-review" onclick="toggleReviewMode()" title="外部写入待审核（进入审核视图）" style="display:none">
       🕓 待审核 <span class="pending-badge hidden" id="pending-badge">0</span>
+    </button>
+    <button class="mini" id="btn-tag-orphans" onclick="toggleOrphanMode()" title="标签异常（孤儿挂载，进入异常视图）" style="display:none">
+      ⚠️ 异常 <span class="pending-badge hidden" id="orphan-badge">0</span>
     </button>
     <button class="mini" onclick="openSettingsModal()" title="设置">⚙️</button>
   </div>

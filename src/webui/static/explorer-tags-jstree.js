@@ -60,6 +60,69 @@ function renderTagTree() {
       const tid = parseInt(data.node.li_attr['data-tag-id']);
       const newName = (data.text || '').trim();
       if (tid && newName) apiRenameTag(tid, newName);
+    }).on('move_node.jstree', function (e, data) {
+      // 拖动标签调整位置/父级 → 持久化到后端
+      const tid = parseInt(data.node.li_attr['data-tag-id']);
+      if (!tid) return;
+      const parent = data.parent && data.parent !== '#' ? data.parent : null;
+      let newParentId = 0;
+      if (parent) {
+        const pid = parent.indexOf('tag_') === 0 ? parseInt(parent.replace('tag_', '')) : NaN;
+        if (isNaN(pid)) return;  // 目标不是有效标签节点
+        newParentId = pid;
+      }
+      let position = 0;
+      try {
+        const inst = data.instance;
+        const parentNode = parent ? inst.get_node(parent) : inst.get_node('#');
+        const idx = (parentNode.children || []).indexOf(data.node.id);
+        position = idx >= 0 ? idx : 0;
+      } catch (e) { position = data.position || 0; }
+      // 记录原位置（用于用户取消时回滚）
+      const oldParent = data.old_parent && data.old_parent !== '#' ? data.old_parent : null;
+      let oldParentId = 0;
+      if (oldParent) {
+        const op = oldParent.indexOf('tag_') === 0 ? parseInt(oldParent.replace('tag_', '')) : NaN;
+        oldParentId = isNaN(op) ? 0 : op;
+      }
+      let oldPosition = data.old_position || 0;
+
+      function persist() {
+        return fetch('/api/tags/' + tid + '/move', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({parent_id: newParentId, order: position}),
+        }).then(r => r.json()).catch(() => ({ok: false, error: '网络错误'}));
+      }
+      function rollback() {
+        // 撤回：移回原父级原位置
+        return fetch('/api/tags/' + tid + '/move', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({parent_id: oldParentId, order: oldPosition}),
+        }).catch(() => {}).then(() => loadTags());
+      }
+
+      persist().then(d => {
+        if (!d.ok) {
+          alert('移动失败: ' + (d.error || ''));
+          loadTags();
+          return;
+        }
+        if (d.orphans && d.orphans.length) {
+          const names = d.orphans.slice(0, 5).map(o => '· ' + o.path.split('/').pop() + ' → ' + o.tag).join('\n');
+          const more = d.orphans.length > 5 ? '\n…等 ' + d.orphans.length + ' 个' : '';
+          const ok = confirm('⚠️ 本次移动产生了 ' + d.orphans.length + ' 个「孤儿挂载」：\n\n' +
+            names + more + '\n\n这些文件挂了父级标签，但移动后无法在编辑标签里取消。\n\n' +
+            '确定继续？（会自动移入「标签异常」警示区）\n取消则撤回本次拖动。');
+          if (!ok) {
+            rollback();
+            return;
+          }
+          // 确定：刷新标签树（警示区会自动显示新孤儿）
+          loadTags();
+        }
+      });
     }).on('ready.jstree', function () {
       styleTagColorDots();
     }).on('refresh.jstree after_open.jstree', function () {
@@ -381,4 +444,6 @@ function tagRename() {
     if (status && name && name !== tagName(tagCtxItem.id)) apiRenameTag(tagCtxItem.id, name);
   });
 }
+
+
 

@@ -125,7 +125,52 @@ def test_review_multi_tag_file_clears_all(store):
     assert store.pending_count() == 1
 
 
-def test_review_mixed_reject_accept(store):
+def test_orphan_detection(store):
+    """孤儿挂载检测：挂父级标签但无子级。"""
+    parent = store.add_tag("父级")
+    child = store.add_tag("子级", parent)
+    # 文件A 只挂父级（无子级）→ 孤儿
+    store.set_folder_tags("D:/a.png", [parent])
+    # 文件B 挂父级+子级 → 正常（祖先链带出父级，有子级伴生）
+    store.set_folder_tags("D:/b.png", [child])
+    orphans = store.orphan_tag_links()
+    assert ("D:/a.png", parent) in orphans
+    assert ("D:/b.png", parent) not in orphans
+
+
+def test_orphan_clear_recursive(store):
+    """级联清理：清理后祖辈若仍是父级且文件无子级伴生，继续清直到无孤儿。"""
+    gp = store.add_tag("爷爷")      # 0
+    parent = store.add_tag("父级", gp)
+    other = store.add_tag("另一个子级", parent)   # 让 parent 保持父级身份
+    child = store.add_tag("子级", parent)
+    # 文件只挂 child → 祖先链带出 parent/gp，正常无孤儿
+    store.set_folder_tags("D:/x.png", [child])
+    assert store.orphan_tag_links() == []
+    # 删掉 child → x.png 挂着 parent（父级，有 other 子级但 x.png 没挂）→ 孤儿
+    store.delete_tag(child)
+    orphans = store.orphan_tag_links()
+    assert ("D:/x.png", parent) in orphans
+    # 一键清理应清掉 parent 的孤儿关联；清理后 x.png 不再挂 parent，
+    # 只剩 gp？—— 但 gp 的关联（祖先链带出）在清理 parent 后成为孤儿（x.png 挂 gp 无 gp 子级）
+    n = store.clear_orphan_tags()
+    assert n == 2
+    assert store.orphan_tag_links() == []
+    assert store.tags_for_folder("D:/x.png") == []
+
+
+def test_orphan_move_report(store):
+    """移动标签到原本是叶子的标签下，move 后应报告该父级产生的孤儿。"""
+    a = store.add_tag("A")       # 叶子，有文件直接挂
+    store.set_folder_tags("D:/a.png", [a])
+    b = store.add_tag("B")       # 要拖进 A 的标签
+    store.move_tag(b, a, 0)      # B 拖入 A → A 变父级
+    # A 现在有子级 B，但 a.png 只挂 A 没挂 B → 孤儿
+    orphans = store.orphan_tag_links()
+    assert ("D:/a.png", a) in orphans
+
+
+
     store.add_pending_apply("D:/a.png", "好标签", None, "s1")
     store.add_pending_apply("D:/b.png", "坏标签", None, "s1")
     items = store.list_pending_applies("pending")
