@@ -246,21 +246,6 @@
       </div>
 
       <div class="settings-block">
-        <h4>🔌 外部写入</h4>
-        <p class="muted" style="margin-bottom:8px">供插件/脚本批量写入标签，限安全区目录、默认人工审核。</p>
-        <div class="muted" style="margin-bottom:4px">安全区目录（逗号分隔）：</div>
-        <input type="text" id="set-allow-roots" placeholder="例如 D:/素材, E:/下载" style="width:100%">
-        <div style="margin-top:6px">
-          <button class="mini" onclick="saveExternalSecurity()">保存安全区</button>
-          <span id="set-ext-status" class="search-feedback"></span>
-        </div>
-        <label style="display:flex;align-items:center;gap:8px;margin-top:10px">
-          <input type="checkbox" id="set-ext-audit" style="width:auto" onchange="saveExternalSecurity()"> 外部写入需人工审核
-          <span class="help-tip" title="开启时，写入先进「🕓 待审核」队列，你在工具栏确认后才生效；关闭则直接写入。留空安全区 = 完全关闭外部写入。">?</span>
-        </label>
-      </div>
-
-      <div class="settings-block">
         <h4>💊 筛选胶囊</h4>
         <div style="margin-top:10px">
           <div class="muted" style="margin-bottom:4px">显示位置：</div>
@@ -277,6 +262,21 @@
       </div>
 
       <div class="settings-col">
+      <div class="settings-block">
+        <h4>🔌 外部写入</h4>
+        <p class="muted" style="margin-bottom:8px">供插件/脚本批量写入标签，限安全区目录、默认人工审核。</p>
+        <div class="muted" style="margin-bottom:4px">安全区目录（逗号分隔）：</div>
+        <input type="text" id="set-allow-roots" placeholder="例如 D:/素材, E:/下载" style="width:100%">
+        <div style="margin-top:6px">
+          <button class="mini" onclick="saveExternalSecurity()">保存安全区</button>
+          <span id="set-ext-status" class="search-feedback"></span>
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:10px">
+          <input type="checkbox" id="set-ext-audit" style="width:auto" onchange="saveExternalSecurity()"> 外部写入需人工审核
+          <span class="help-tip" title="开启时，写入先进「🕓 待审核」队列，你在工具栏确认后才生效；关闭则直接写入。留空安全区 = 完全关闭外部写入。">?</span>
+        </label>
+      </div>
+
       <div class="settings-block">
         <h4>🗂 文件树</h4>
         <label style="display:flex;align-items:center;gap:8px;margin-top:6px">
