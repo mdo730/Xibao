@@ -25,10 +25,14 @@ function iconSvgUrl(name) {
 }
 
 // 返回内联 <img> 或 fallback span 的 HTML
-function fileIconHtml(name, cls, fallbackCls, emoji) {
+function fileIconHtml(name, cls, fallbackCls, emoji, path) {
   const iconName = iconNameForFile(name);
   if (iconName) {
     return `<img class="${cls}" src="${iconSvgUrl(iconName)}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'${fallbackCls}',textContent:'${emoji}'}))">`;
+  }
+  // 无 SVG 映射：尝试系统文件图标（.exe 游戏/3D等），失败回退 emoji
+  if (path) {
+    return `<img class="${cls}" src="/api/fileicon?path=${encodeURIComponent(path)}&size=64" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'${fallbackCls}',textContent:'${emoji}'}))">`;
   }
   return `<span class="${fallbackCls}">${emoji}</span>`;
 }

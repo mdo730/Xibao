@@ -424,7 +424,7 @@ function appendGridView(chunk, startIdx) {
       // 文档/PDF/压缩包/代码：尝试系统 COM 缩略图（PSD/Office/PDF 有效），失败回退图标
       display = `<img class="cell-thumb doc-thumb" src="/api/thumb?path=${encodeURIComponent(it.path)}&size=256" loading="lazy">`;
     } else {
-      display = fileIconHtml(it.name, 'cell-icon-img', 'cell-icon', iconOf(it.type));
+      display = fileIconHtml(it.name, 'cell-icon-img', 'cell-icon', iconOf(it.type), it.path);
     }
     const meta = it.isFolder ? `${it.file_count} 项` : fmtSize(it.size);
     div.innerHTML = `<div class="cell-content">${display}</div><div class="cell-name">${nameHtml(it)}</div><div class="cell-meta">${meta}</div>`;
@@ -432,7 +432,7 @@ function appendGridView(chunk, startIdx) {
     if (it.type !== 'image') {
       const vt = div.querySelector('.video-thumb, .doc-thumb');
       if (vt) vt.onerror = () => {
-        vt.outerHTML = fileIconHtml(it.name, 'cell-icon-img', 'cell-icon', iconOf(it.type));
+        vt.outerHTML = fileIconHtml(it.name, 'cell-icon-img', 'cell-icon', iconOf(it.type), it.path);
       };
     }
     div.dataset.key = it.path;
@@ -467,7 +467,7 @@ function appendListView(chunk, startIdx) {
     if (it.isFolder) iconHtml = '<span class="list-icon">📁</span>';
     else if (it.type === 'image') iconHtml = `<img class="list-icon-img" src="${relUrl(it.path)}">`;
     else {
-      iconHtml = fileIconHtml(it.name, 'list-icon-img', 'list-icon', iconOf(it.type));
+      iconHtml = fileIconHtml(it.name, 'list-icon-img', 'list-icon', iconOf(it.type), it.path);
     }
     tr.innerHTML = `<td>${iconHtml} ${nameHtml(it)}</td>
       <td>${it.isFolder ? '文件夹' : it.type}</td>

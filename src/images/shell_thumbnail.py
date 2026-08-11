@@ -194,3 +194,9 @@ def get_shell_thumbnail(path, size=256, flags=None, icon_fallback=True):
     t.start()
     t.join()
     return box.get("img")
+
+
+def get_shell_icon(path, size=64):
+    """取系统文件图标（ICONONLY）。返回 PIL Image 或 None。"""
+    return get_shell_thumbnail(path, size, flags=SIIGBF_ICONONLY | SIIGBF_BIGGERSIZEOK,
+                               icon_fallback=False)

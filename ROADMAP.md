@@ -91,7 +91,7 @@
 4. ✅ **西煲内置右键菜单 + 外部工具集成**（已完成核心）：`src/images/tools.py` 探测已装软件（7-Zip/WinRAR/Locale Emulator/Everything，纯 winreg）+ `/api/tools`（动作清单）+ `/api/tools/run`（后台执行）+ 前端右键菜单动态加载；参考 patool/ConEmu/LE 官方实现；74 单测
    - **接口预留**：`tools.py` 的 `detect_tools()` 返回 `ExternalTool` 列表（key/label/exe/build_cmds），新增工具只需加探测+命令构造；前端 `loadCtxTools` 动态渲染，无需改菜单结构
    - 方向确认：内置菜单聚焦"文件组织高频操作"（标签/备注/评分/解压/LE 运行），不照搬 Windows 全家桶
-5. **缩略图可插拔后端**：优先系统 COM 缩略图（覆盖广、与原生一致），失败回退 PyAV——当前 PyAV 是妥协，重构后双后端覆盖 PSD/3D 等格式
+5. ✅ **缩略图可插拔后端**（已完成）：`shell_thumbnail.py` 系统 COM 缩略图（纯 ctypes，参考 yasb）+ `thumbnail.py` 多后端（COM 优先 + PyAV 回退）；PSD/PDF/Office 等也出缩略图；网格视图 doc/pdf/archive/code 尝试系统缩略图；74 单测
 6. **导航源抽象**：盘符 / Known Folders / 标签视图统一为导航接口——为虚拟导航预留
 
 ### 未来展望

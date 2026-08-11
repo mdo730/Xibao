@@ -302,3 +302,31 @@ def api_tools_run():
     import threading
     threading.Thread(target=t.run, args=(path, wd), daemon=True).start()
     return jsonify({"ok": True, "done": False})
+
+
+@files_bp.get("/api/fileicon")
+def api_fileicon():
+    """取系统文件图标（ICONONLY），按扩展名缓存到磁盘。返回 PNG。"""
+    from ...images import shell_thumbnail
+    path = request.args.get("path") or ""
+    try:
+        size = int(request.args.get("size") or 64)
+    except ValueError:
+        size = 64
+    if not path or not os.path.isfile(path):
+        return jsonify({"ok": False, "error": "无效路径"}), 400
+    ext = os.path.splitext(path)[1].lower() or "_noext"
+    import hashlib
+    icon_dir = os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"),
+                            "Xibao", "fileicons")
+    os.makedirs(icon_dir, exist_ok=True)
+    digest = hashlib.md5(ext.encode("utf-8")).hexdigest()[:12]
+    cached = os.path.join(icon_dir, f"{digest}_{size}.png")
+    if os.path.exists(cached):
+        return send_file(cached, mimetype="image/png", max_age=86400)
+    img = shell_thumbnail.get_shell_icon(path, size)
+    if img is None:
+        return jsonify({"ok": False, "error": "无图标"}), 404
+    import io
+    img.save(cached, format="PNG")
+    return send_file(cached, mimetype="image/png", max_age=86400)
