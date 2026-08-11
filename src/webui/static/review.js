@@ -55,16 +55,12 @@ function renderReviewBanner() {
     banner = document.createElement('div');
     banner.id = 'review-banner';
     banner.className = 'review-banner';
-    // 插到 exp-left-main（文件树+主体）之前，通栏一行，不挤占文件列表
-    const main = document.querySelector('.exp-left-main');
-    if (main) main.parentNode.insertBefore(banner, main);
-    else {
-      const body = document.getElementById('explorer-body');
-      body.parentNode.insertBefore(banner, body);
-    }
+    // 插到文件列表（explorer-body）顶部，只占列表区域宽度，不遮文件树/标签树
+    const body = document.getElementById('explorer-body');
+    body.insertBefore(banner, body.firstChild);
   }
-  banner.innerHTML = `<span class="review-banner-title">🕓 外部写入审核</span>
-    <span class="muted" id="review-banner-count">${pendingGroups.length} 个文件待审核</span>
+  banner.innerHTML = `<span class="review-banner-title">🕓 审核</span>
+    <span class="muted" id="review-banner-count">${pendingGroups.length} 个文件</span>
     <span class="review-banner-actions">
       <button class="mini ok" onclick="reviewAll(true)">✅ 全部接受</button>
       <button class="mini danger" onclick="reviewAll(false)">🗑 全部拒绝</button>

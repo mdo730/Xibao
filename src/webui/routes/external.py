@@ -189,7 +189,7 @@ def api_pending():
             ext = (os.path.splitext(p)[1] or "").lower()
             g["type"] = _ext_type(ext)
             g["exists"] = os.path.exists(p)
-        return jsonify({"ok": True, "count": store.pending_count(),
+        return jsonify({"ok": True, "count": len(groups),
                         "items": list(groups.values())})
     finally:
         store.close()

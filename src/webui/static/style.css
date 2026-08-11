@@ -322,7 +322,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: #0b57d0
 .pending-badge { display: inline-block; min-width: 16px; height: 16px; line-height: 16px; border-radius: 8px; background: #e5533d; color: #fff; font-size: 11px; text-align: center; padding: 0 4px; margin-left: 2px; }
 .pending-badge.hidden { display: none; }
 #btn-pending-review.active { background: #fff3e0; border-color: #ff9800; color: #e65100; }
-.review-banner { display: flex; align-items: center; gap: 12px; padding: 4px 14px; background: #fff8e1; border-bottom: 1px solid #ffd54f; font-size: 12px; line-height: 1.4; white-space: nowrap; overflow: hidden; }
+.review-banner { display: flex; align-items: center; gap: 12px; padding: 5px 12px; background: #fff8e1; border: 1px solid #ffd54f; border-radius: 8px; font-size: 12px; line-height: 1.4; white-space: nowrap; overflow: hidden; position: sticky; top: 0; z-index: 20; margin-bottom: 10px; }
 .review-banner-title { font-weight: 600; color: #e65100; }
 .review-banner-actions { margin-left: auto; display: flex; gap: 6px; flex-shrink: 0; }
 .review-banner-actions .mini { padding: 1px 8px; font-size: 11px; }
