@@ -270,7 +270,7 @@
         </div>
       </div>
 
-      <div class="version-info">西煲 <strong>v0.5.5 beta</strong></div>
+      <div class="version-info">西煲 <strong>v0.6.0</strong></div>
       <div class="version-info author-line">作者 <a href="https://space.bilibili.com/128210" target="_blank" rel="noopener">@parukamun</a></div>
       <div class="version-info free-note">该软件永久免费，付费了说明你被骗了！</div>
       <div class="version-info" style="margin-top:10px">
@@ -300,7 +300,7 @@
 
     <details>
       <summary>🧭 基本操作</summary>
-      <p><strong>浏览文件</strong>：左侧是「此电脑」目录树，点文件夹进入；中间是文件列表，双击文件用系统默认程序打开，双击文件夹进入。</p>
+      <p><strong>浏览文件</strong>：左侧是「文件树」——顶部为系统文件夹（桌面/下载/图片等，可在设置中隐藏或挑选），下方是磁盘；点文件夹进入，中间是文件列表，双击文件用系统默认程序打开，双击文件夹进入。</p>
       <p><strong>切换视图</strong>：顶部 ☰ 列表视图 / ▦ 网格视图按钮，右侧分段按钮可调节网格大小（50%–150%）。</p>
       <p><strong>排序</strong>：右上角「排序：」菜单选择按名称/修改日期/类型排列，并选择递增/递减。文件夹始终排在文件前面。</p>
       <p><strong>快速访问</strong>：右键文件夹 → 「⭐ 添加到快速访问」，常用目录固定在文件树顶部（系统文件夹下方）。可在设置中隐藏系统文件夹。</p>
@@ -346,6 +346,7 @@
       <p><strong>动画</strong>：低配置电脑可关闭动画开关，界面更流畅。</p>
       <p><strong>标签迁移</strong>：开启后，文件/文件夹移动或重命名时，标签会跟随到新位置；关闭则清理旧位置的标签关联（默认关闭）。</p>
       <p><strong>筛选胶囊</strong>：可切换胶囊显示位置（标签树顶 / 地址栏下方）与尺寸（小/中/大）。</p>
+      <p><strong>文件树</strong>：可开关「显示系统文件夹」，并可勾选要保留的项（桌面/下载/图片等）；不常用的话可只留磁盘。</p>
       <p><strong>标签备份</strong>：导出/导入标签，方便换电脑或备份。</p>
     </details>
   </div>
@@ -362,6 +363,17 @@
   </div>
   <div class="help-doc">
     <details open>
+      <summary>v0.6.0</summary>
+      <p>· 新增：文件树接入系统文件夹（桌面/下载/图片/视频/文档/音乐等），自动适配 OneDrive 重定向</p>
+      <p>· 新增：设置里可开关/勾选要显示的系统文件夹（设置 → 文件树），也可只留磁盘</p>
+      <p>· 新增：快速访问合进文件树，固定在系统文件夹下方，与磁盘间以分隔线隔开</p>
+      <p>· 新增：缩略图可插拔后端——优先系统缩略图引擎（COM），PSD/PDF/Office 等也能出缩略图；失败自动回退内置解码</p>
+      <p>· 新增：系统文件图标——游戏 .exe 等无内置图标的显示系统图标（每个程序独立图标，不走错映射）</p>
+      <p>· 新增：右键外部工具集成——自动探测 7-Zip/WinRAR/Bandizip/Locale Emulator/Everything，右键即可解压/用 LE 运行</p>
+      <p>· 新增：解压后自动刷新文件列表（LE 运行不等待）</p>
+      <p>· 新增：右键菜单位置约束——靠近屏幕底部/右侧时自动上移左移，不再超出显示范围</p>
+    </details>
+    <details>
       <summary>v0.5.5</summary>
       <p>· 新增：标签树每个标签后显示内含数量（含子标签总数）</p>
     </details>

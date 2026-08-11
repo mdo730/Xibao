@@ -12,7 +12,7 @@ settings_bp = Blueprint("settings", __name__)
 @settings_bp.get("/api/health")
 def api_health():
     """健康探测：带唯一标记，用于残留进程识别（启动时）。"""
-    return jsonify({"ok": True, "app": "xibao", "version": "0.5.5"})
+    return jsonify({"ok": True, "app": "xibao", "version": "0.6.0"})
 
 
 @settings_bp.get("/api/help-seen")
