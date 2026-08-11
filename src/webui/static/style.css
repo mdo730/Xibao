@@ -61,7 +61,7 @@ button.danger { background: #e81123; border-color: #e81123; color: #fff; }
 button.danger:hover { background: #c50f1f; }
 button.warn { background: #f7630c; border-color: #f7630c; color: #fff; }
 button.warn:hover { background: #d45407; }
-button.mini { padding: 3px 10px; font-size: 12px; }
+button.mini { user-select: none; padding: 3px 10px; font-size: 12px; }
 button.ghost { background: transparent; border-color: transparent; color: #0b57d0; }
 button.ghost:hover { background: #f2f6fd; }
 button.active { outline: 2px solid #0b57d0; }
@@ -158,12 +158,12 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: #0b57d0
 
 /* ---- 资源管理器主体 ---- */
 .explorer { flex: 1; display: flex; flex-direction: column; background: #f3f3f3; height: 100%; min-height: 0; }
-.explorer-topbar { display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: #fff; border-bottom: 1px solid #e5e5e5; }
-.nav-btn { padding: 5px 10px; font-size: 15px; }
-.address-bar { flex: 1; display: flex; align-items: center; background: #fff; border: 1px solid #c9c9c9; border-radius: 6px; padding: 0 10px; height: 34px; cursor: text; }
+.explorer-topbar { user-select: none; -webkit-user-select: none; display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: #fff; border-bottom: 1px solid #e5e5e5; }
+.nav-btn { user-select: none; padding: 5px 10px; font-size: 15px; }
+.address-bar { user-select: none; flex: 1; display: flex; align-items: center; background: #fff; border: 1px solid #c9c9c9; border-radius: 6px; padding: 0 10px; height: 34px; cursor: text; }
 .address-bar span { font-size: 13px; color: #333; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .address-bar input { width: 100%; border: none; outline: none; font-size: 13px; }
-.explorer-tools { display: flex; align-items: center; gap: 6px; padding: 6px 14px; background: #fff; border-bottom: 1px solid #e5e5e5; flex-wrap: wrap; }
+.explorer-tools { user-select: none; -webkit-user-select: none; display: flex; align-items: center; gap: 6px; padding: 6px 14px; background: #fff; border-bottom: 1px solid #e5e5e5; flex-wrap: wrap; }
 .explorer-body { flex: 1; overflow-y: auto; padding: 12px 14px; }
 
 /* 网格视图 */
@@ -510,7 +510,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: #0b57d0
 .tag-chip-clear:hover { background: #f2f2f2; }
 
 /* ---- 排序菜单（上下两区） ---- */
-.sort-wrap { display: flex; align-items: center; gap: 6px; }
+.sort-wrap { user-select: none; display: flex; align-items: center; gap: 6px; }
 .sort-label { font-size: 12px; color: #8a8a8a; }
 .sort-menu { position: relative; }
 .sort-toggle { display: flex; align-items: center; gap: 4px; }
@@ -584,7 +584,7 @@ body.no-animation .list-view tr {
 .tag-modal-new { flex-shrink: 0; }
 
 /* ---- 网格缩放分段按钮 ---- */
-.scale-seg { display: inline-flex; background: #fff; border: 1px solid #ddd; border-radius: 8px; overflow: hidden; }
+.scale-seg { user-select: none; display: inline-flex; background: #fff; border: 1px solid #ddd; border-radius: 8px; overflow: hidden; }
 .scale-seg button { border: none; background: transparent; color: #666; padding: 4px 9px; cursor: pointer; font-size: 12px; }
 .scale-seg button + button { border-left: 1px solid #ddd; }
 .scale-seg button.active { background: #0b57d0; color: #fff; }
