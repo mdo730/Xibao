@@ -1,8 +1,10 @@
 // ---- 打标签弹窗 ----
 let tagModalMode = 'set';  // 'set'=覆盖编辑（单选），'add'=追加（多选）
-async function openTagModal(paths, kind, mode) {
+let tagModalWarn = null;   // 异常标签 id 集合（编辑弹窗内加 ⚠️ 警示）
+async function openTagModal(paths, kind, mode, warnTagIds) {
   tagModalPaths = (Array.isArray(paths) ? paths : [paths]).map(p => p.replace(/\/+$/, ''));
   tagModalMode = mode || 'set';
+  tagModalWarn = warnTagIds || null;
   const isMulti = tagModalPaths.length > 1;
   document.getElementById('tag-modal-title').textContent = isMulti
     ? `为 ${tagModalPaths.length} 个条目追加标签`
@@ -27,7 +29,7 @@ async function openTagModal(paths, kind, mode) {
     const list = document.getElementById('tag-modal-list');
     // 统一用 renderTagOptionTree（内部 destroy 重建 + leafOnly），避免二次编辑走非 leafOnly 分支
     if (!tags.length) list.innerHTML = '<p class="muted">还没有标签，请先在右侧标签树新建标签</p>';
-    renderTagOptionTree('#tag-modal-list', Array.from(curIds), true);
+    renderTagOptionTree('#tag-modal-list', Array.from(curIds), true, tagModalWarn);
   } catch (e) { console.error(e); }
   modalShow(document.getElementById('tag-modal'));
 }

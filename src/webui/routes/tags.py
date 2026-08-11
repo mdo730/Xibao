@@ -126,15 +126,20 @@ def api_tags_orphans_clear():
 
 @tags_bp.post("/api/tags/orphans/clear-path")
 def api_tags_orphans_clear_path():
-    """按路径清理"无法管理"挂载。"""
+    """按路径清理"无法管理"挂载。支持单 path 或批量 paths 数组。"""
     data = request.get_json(force=True) or {}
-    path = (data.get("path") or "").replace("\\", "/").rstrip("/")
-    if not path:
+    paths = data.get("paths")
+    if not isinstance(paths, list):
+        path = (data.get("path") or "").replace("\\", "/").rstrip("/")
+        paths = [path] if path else []
+    if not paths:
         return jsonify({"ok": False, "error": "缺少路径"}), 400
     store = Store()
     try:
-        n = store.clear_unmanageable_for_path(path)
-        return jsonify({"ok": True, "cleared": n})
+        total = 0
+        for p in paths:
+            total += store.clear_unmanageable_for_path(p.replace("\\", "/").rstrip("/"))
+        return jsonify({"ok": True, "cleared": total})
     finally:
         store.close()
 

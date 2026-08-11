@@ -5,6 +5,7 @@
 let taskViewMode = null;   // 'review' | 'orphan' | null
 let pendingGroups = [];
 let taskViewSeq = 0;       // 切换序号：防止异步 refresh 覆盖新视图
+let orphanSelected = new Set();  // 异常模式：选中的文件路径
 
 // ---------- 角标（按钮仅在有内容时显示） ----------
 
@@ -59,12 +60,15 @@ function toggleOrphanMode() { toggleTaskView('orphan'); }
 function exitTaskView() {
   taskViewMode = null;
   taskViewSeq++;
+  orphanSelected = new Set();
   ['btn-pending-review', 'btn-tag-orphans'].forEach(id => {
     const b = document.getElementById(id);
     if (b) b.classList.remove('active');
   });
   const banner = document.getElementById('review-banner');
   if (banner) banner.remove();
+  const bar = document.getElementById('orphan-action-bar');
+  if (bar) bar.remove();
   if (typeof refresh === 'function') refresh();
 }
 
@@ -128,7 +132,7 @@ function renderTaskBanner() {
   const allBtn = isReview
     ? `<button class="mini ok" onclick="reviewAll(true)">✅ 全部接受</button>
        <button class="mini danger" onclick="reviewAll(false)">🗑 全部拒绝</button>`
-    : `<button class="mini danger" onclick="clearOrphans()">🗑 一键清理</button>`;
+    : '';   // 异常模式操作在底部栏（移除选中/全选/退出）
   banner.innerHTML = `<span class="review-banner-title">${title}</span>
     <span class="muted" id="review-banner-count">${countText}</span>
     <span class="review-banner-actions">
@@ -149,9 +153,11 @@ function renderTaskGrid() {
     grid.innerHTML = `<div class="review-empty"><div>${emptyText}</div><button class="mini" style="margin-top:12px" onclick="exitTaskView()">退出</button></div>`;
     return;
   }
+  const isReview = taskViewMode === 'review';
   for (const g of pendingGroups) {
     const card = document.createElement('div');
-    card.className = 'cell cell-file review-card';
+    const selected = !isReview && orphanSelected.has(g.path);
+    card.className = 'cell cell-file review-card' + (selected ? ' sel' : '');
     card.dataset.path = g.path;
     let display = '';
     if (g.type === 'image') {
@@ -161,21 +167,33 @@ function renderTaskGrid() {
     } else {
       display = fileIconHtml(basename(g.path), 'cell-icon-img', 'cell-icon', iconOf('other'), g.path);
     }
-    const tagsHtml = g.tags.map(t =>
-      `<span class="review-tag">${escHtml((t.parent ? t.parent + ' > ' : '') + t.name)}</span>`).join('');
     const srcs = [...new Set(g.tags.map(t => t.source || 'external'))].join(',');
-    const isReview = taskViewMode === 'review';
     const actions = isReview
       ? `<button class="mini ok" onclick="reviewGroup('${escAttr(g.path)}', true)">✅ 接受</button>
          <button class="mini danger" onclick="reviewGroup('${escAttr(g.path)}', false)">🗑 拒绝</button>`
-      : `<button class="mini" onclick="openTagModal('${escAttr(g.path)}', 'file', 'set')">✏️ 修改标签</button>
-         <button class="mini danger" onclick="removeOrphan('${escAttr(g.path)}')">🗑 移除标签</button>`;
+      : `<div class="review-card-actions-icons">
+           <button class="icon-btn" onclick="event.stopPropagation();openTagModal('${escAttr(g.path)}', 'file', 'set', ${JSON.stringify(g.ids || [])})" title="修改标签" aria-label="修改标签">✏️</button>
+           <button class="icon-btn danger" onclick="event.stopPropagation();removeOrphan('${escAttr(g.path)}')" title="移除异常标签" aria-label="移除异常标签">🗑</button>
+         </div>`;
+    // 异常模式：异常标签单独标红一行（一个文件最多一个异常标签）
+    const abnormalHtml = isReview ? '' :
+      `<div class="review-card-abnormal"><span class="review-tag-warn">⚠️ ${escHtml(g.tags[0] ? g.tags[0].name : '')}</span></div>`;
+    const selBadge = isReview ? '' : `<span class="review-card-selbadge">${selected ? '✓' : ''}</span>`;
     card.innerHTML = `
-      <div class="cell-content">${display}</div>
+      <div class="cell-content">${display}${selBadge}</div>
       <div class="cell-name">${escHtml(basename(g.path))}</div>
-      <div class="review-card-tags">${tagsHtml || '<span class="muted">无标签</span>'}</div>
-      <div class="review-card-meta muted">${isReview ? '来源: ' + escHtml(srcs) : '父级标签（编辑弹窗不可勾选）'}</div>
+      ${abnormalHtml}
+      <div class="review-card-meta muted">${isReview ? '来源: ' + escHtml(srcs) : '此标签现在是父级，编辑弹窗不可勾选'}</div>
       <div class="review-card-actions">${actions}</div>`;
+    // 异常模式：点击卡片切换选中
+    if (!isReview) {
+      card.addEventListener('click', () => {
+        if (orphanSelected.has(g.path)) orphanSelected.delete(g.path);
+        else orphanSelected.add(g.path);
+        renderTaskGrid();
+        renderOrphanActionBar();
+      });
+    }
     if (g.type !== 'image') {
       const vt = card.querySelector('.video-thumb, .doc-thumb');
       if (vt) {
@@ -188,6 +206,7 @@ function renderTaskGrid() {
     }
     grid.appendChild(card);
   }
+  if (!isReview) renderOrphanActionBar();
 }
 
 function basename(p) {
@@ -201,6 +220,52 @@ function escAttr(s) {
 function escHtml(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+}
+
+// ---------- 异常模式底部操作栏 ----------
+
+function renderOrphanActionBar() {
+  let bar = document.getElementById('orphan-action-bar');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'orphan-action-bar';
+    bar.className = 'orphan-action-bar';
+    const body = document.getElementById('explorer-body');
+    body.appendChild(bar);
+  }
+  const total = pendingGroups.length;
+  const sel = orphanSelected.size;
+  bar.innerHTML = `<span class="orphan-bar-count">已选 <strong>${sel}</strong> / ${total} 项</span>
+    <span class="orphan-bar-actions">
+      <button class="action-btn" onclick="orphanSelectAll()">全选</button>
+      <button class="action-btn danger" onclick="orphanRemoveSelected()">🗑 移除选中异常</button>
+      <button class="action-btn" onclick="exitTaskView()">✕ 退出</button>
+    </span>`;
+}
+
+function orphanSelectAll() {
+  if (orphanSelected.size === pendingGroups.length) {
+    orphanSelected = new Set();
+  } else {
+    orphanSelected = new Set(pendingGroups.map(g => g.path));
+  }
+  renderTaskGrid();
+}
+
+async function orphanRemoveSelected() {
+  if (!orphanSelected.size) { alert('请先选择要处理的文件'); return; }
+  if (!confirm(`移除 ${orphanSelected.size} 个文件上的异常标签？`)) return;
+  const paths = Array.from(orphanSelected);
+  try {
+    const r = await fetch('/api/tags/orphans/clear-path', {method: 'POST',
+      headers: {'Content-Type': 'application/json'}, body: JSON.stringify({paths})});
+    const d = await r.json();
+    if (!d.ok) { alert('操作失败: ' + (d.error || '')); return; }
+    orphanSelected = new Set();
+    refreshReviewView();
+    if (typeof loadTags === 'function') loadTags();
+    if (typeof refresh === 'function') refresh();
+  } catch (e) { alert('操作失败: ' + e.message); }
 }
 
 // ---------- 待审核操作 ----------
@@ -247,19 +312,6 @@ async function removeOrphan(path) {
     if (typeof loadTags === 'function') loadTags();
     if (typeof refresh === 'function') refresh();
   } catch (e) { alert('操作失败: ' + e.message); }
-}
-
-async function clearOrphans() {
-  if (!confirm('确定清理所有「无法管理」的父级标签吗？\n\n将移除文件上这些父级标签的关联。')) return;
-  try {
-    const r = await fetch('/api/tags/orphans/clear', {method: 'POST'});
-    const d = await r.json();
-    if (!d.ok) { alert('清理失败: ' + (d.error || '')); return; }
-    alert('已清理 ' + d.cleared + ' 个父级标签关联');
-    refreshReviewView();
-    if (typeof loadTags === 'function') loadTags();
-    if (typeof refresh === 'function') refresh();
-  } catch (e) { alert('清理失败: ' + e.message); }
 }
 
 // ---------- 刷新 ----------

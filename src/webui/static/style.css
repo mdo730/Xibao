@@ -342,6 +342,24 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: #0b57d0
 .review-card-actions .mini { flex: 1; }
 .review-card .cell-name { font-size: 12px; }
 .review-tag { display: inline-block; background: #eef2ff; color: #3a5bd9; border-radius: 4px; padding: 1px 8px; font-size: 12px; }
+/* 异常模式：图标按钮 + 异常标签标红 */
+.review-card-actions-icons { display: flex; gap: 8px; margin-top: 6px; justify-content: center; }
+.icon-btn { width: 28px; height: 28px; border: 1px solid #e0e0e0; border-radius: 6px; background: #fff; cursor: pointer; font-size: 14px; display: inline-flex; align-items: center; justify-content: center; transition: background .15s; }
+.icon-btn:hover { background: #f2f2f2; }
+.icon-btn.danger:hover { background: #fdecea; border-color: #f5c6c0; }
+.review-card-abnormal { margin-top: 4px; }
+.review-tag-warn { display: inline-block; background: #fdecea; color: #c62828; border: 1px solid #f5c6c0; border-radius: 4px; padding: 1px 8px; font-size: 12px; font-weight: 600; }
+/* 异常模式：多选角标 + 底部操作栏 */
+.review-card.sel { outline: 2px solid #2196f3; outline-offset: -2px; }
+.review-card-selbadge { position: absolute; top: 4px; left: 4px; width: 20px; height: 20px; border-radius: 50%; background: #2196f3; color: #fff; font-size: 13px; display: flex; align-items: center; justify-content: center; z-index: 2; }
+.orphan-action-bar { position: sticky; bottom: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; background: #fff; border-top: 1px solid #e0e0e0; margin-top: 12px; z-index: 20; }
+.orphan-bar-count { font-size: 13px; color: #333; }
+.orphan-bar-count strong { color: #2196f3; }
+.orphan-bar-actions { display: flex; gap: 8px; }
+.action-btn { padding: 7px 16px; border: 1px solid #d0d0d0; border-radius: 8px; background: #fff; cursor: pointer; font-size: 13px; transition: background .15s; }
+.action-btn:hover { background: #f2f2f2; }
+.action-btn.danger { border-color: #f5c6c0; color: #c62828; background: #fff8f7; }
+.action-btn.danger:hover { background: #fdecea; }
 .mini.ok { background: #e8f5e9; color: #2e7d32; }
 .mini.ok:hover { background: #d5ecd7; }
 .mini.danger { background: #fdecea; color: #c62828; }

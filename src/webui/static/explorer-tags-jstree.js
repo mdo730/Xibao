@@ -376,13 +376,15 @@ async function apiRenameTag(tid, name) {
 
 // 打标签弹窗/筛选弹窗复用：用 jsTree 渲染树形选项
 // leafOnly=true 时父级标签不可勾选（仅叶子可选），用于编辑标签弹窗
-function renderTagOptionTree(containerSel, checkedIds, leafOnly) {
+// warnTagIds：异常标签 id 集合，渲染时在这些节点加 ⚠️ 警示（提示"此标签现在是父级，不可勾选"）
+function renderTagOptionTree(containerSel, checkedIds, leafOnly, warnTagIds) {
+  const warn = new Set(warnTagIds || []);
   function buildData(parentId) {
     return tagChildren(parentId).map(t => {
       const kids = tagChildren(t.id);
       const node = {
         id: 'tag_' + t.id,
-        text: t.name,
+        text: warn.has(t.id) ? (t.name + ' ⚠️') : t.name,
         li_attr: {'data-tag-id': t.id},
         state: {},
         children: kids.length ? buildData(t.id) : [],
