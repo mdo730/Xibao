@@ -73,6 +73,8 @@ function renderChipsSettingUI() {
 const KNOWN_KEY = 'xibao_known_folders';
 const KNOWN_LABELS = {Desktop: '桌面', Downloads: '下载', Pictures: '图片', Videos: '视频',
   Documents: '文档', Music: '音乐', ProgramData: '程序数据', Public: '公共'};
+const KNOWN_ICONS = {Desktop: '🖥', Downloads: '⬇', Pictures: '🖼', Videos: '🎬',
+  Documents: '📄', Music: '🎵', ProgramData: '🗂', Public: '👥'};
 function knownFoldersSetting() {
   try {
     const v = JSON.parse(localStorage.getItem(KNOWN_KEY) || 'null');
@@ -105,17 +107,20 @@ async function renderKnownFoldersSettingUI() {
       .map(name => known.find(n => n.name === name))
       .filter(Boolean);
     wrap.innerHTML = '';
+    // 两列紧凑排列，只显示 emoji + 名字（不显示路径）
+    wrap.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:2px 16px';
     sorted.forEach(n => {
       const label = document.createElement('label');
-      label.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:12px;padding:3px 0';
+      label.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:12px;padding:2px 0;cursor:pointer';
       const input = document.createElement('input');
       input.type = 'checkbox';
       input.dataset.name = n.name;
       input.checked = !(s.list && s.list.length) || s.list.includes(n.name);
       input.style.width = 'auto';
+      input.style.margin = '0';
       input.onchange = saveKnownFoldersSetting;
       label.appendChild(input);
-      label.appendChild(document.createTextNode((KNOWN_LABELS[n.name] || n.name) + '  ' + n.path.replace(/\//g, '\\')));
+      label.appendChild(document.createTextNode((KNOWN_ICONS[n.name] || '📁') + ' ' + (KNOWN_LABELS[n.name] || n.name)));
       wrap.appendChild(label);
     });
   } catch (e) {
