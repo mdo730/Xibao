@@ -26,10 +26,130 @@ def _current_schema_version(conn):
     return int(row["value"]) if row else None
 
 
+# ---------- 数据库容错（检测/修复/快照，v0.6.0 第 2 步） ----------
+
+def check_integrity(db_path):
+    """返回 (是否健康, 错误列表)。用只读连接跑 PRAGMA integrity_check。"""
+    if not os.path.exists(db_path):
+        return True, []
+    try:
+        con = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+        try:
+            rows = con.execute("PRAGMA integrity_check").fetchall()
+        finally:
+            con.close()
+    except sqlite3.DatabaseError as e:
+        return False, [f"无法打开: {e}"]
+    if len(rows) == 1 and rows[0][0] == "ok":
+        return True, []
+    return False, [r[0] for r in rows]
+
+
+def salvage_db(db_path, out_path):
+    """尽量把可读表抢救到新库，返回成功导出的表数。损坏行跳过。"""
+    src = sqlite3.connect(db_path)
+    dst = sqlite3.connect(out_path)
+    n = 0
+    try:
+        objs = src.execute(
+            "SELECT type, name, sql FROM sqlite_master WHERE sql IS NOT NULL"
+        ).fetchall()
+        for typ, name, sql in objs:
+            try:
+                if typ == "table":
+                    dst.execute(sql)
+                    cur = src.execute(f'SELECT * FROM "{name}"')
+                    cols = [d[0] for d in cur.description]
+                    ph = ",".join("?" * len(cols))
+                    for row in cur:
+                        try:
+                            dst.execute(f'INSERT INTO "{name}" VALUES ({ph})', row)
+                        except sqlite3.DatabaseError:
+                            continue
+                    dst.commit()
+                    n += 1
+                elif typ == "index":
+                    dst.execute(sql)
+            except (sqlite3.DatabaseError, sqlite3.OperationalError):
+                dst.rollback()
+                continue
+    finally:
+        dst.close()
+        src.close()
+    return n
+
+
+def snapshot_db(db_path, snap_dir=None, keep=5):
+    """在线一致性快照（Connection.backup），保留最近 keep 份。返回快照路径。"""
+    if not os.path.exists(db_path):
+        return None
+    snap_dir = snap_dir or appdata_dir("data", "snapshots")
+    os.makedirs(snap_dir, exist_ok=True)
+    import time as _time
+    dest = os.path.join(snap_dir, f"memory.{_time.strftime('%Y%m%d-%H%M%S')}.snap")
+    src = sqlite3.connect(db_path)
+    dst = sqlite3.connect(dest)
+    try:
+        with dst:
+            src.backup(dst)
+    finally:
+        dst.close()
+        src.close()
+    snaps = sorted(f for f in os.listdir(snap_dir) if f.endswith(".snap"))
+    for old in snaps[:-keep]:
+        try:
+            os.remove(os.path.join(snap_dir, old))
+        except OSError:
+            pass
+    return dest
+
+
+def ensure_healthy_db(db_path):
+    """启动容错：检测 → 损坏则 salvage 到 recovered → 验证 → 采用或保留备份。
+    返回 (是否可用, 提示信息)。仅在已有库文件时执行。"""
+    if not os.path.exists(db_path):
+        return True, ""
+    ok, errors = check_integrity(db_path)
+    if ok:
+        return True, ""
+    log.warning("数据库完整性检查失败: %s", errors[:2])
+    # 尝试 salvage 抢救
+    recovered = db_path + ".recovered"
+    try:
+        n = salvage_db(db_path, recovered)
+        rok, rerrors = check_integrity(recovered)
+        if rok and n > 0:
+            # 备份损坏原库，用 recovered 替换
+            try:
+                shutil.copy2(db_path, db_path + ".corrupt")
+            except OSError:
+                pass
+            os.replace(recovered, db_path)
+            log.warning("数据库损坏，已从 %d 个表抢救恢复", n)
+            return True, f"数据库曾损坏，已尽量恢复（{n} 个表）。建议导出备份核对。"
+        else:
+            log.warning("数据库损坏且抢救失败，请用备份恢复: %s", rerrors[:2])
+            return False, "数据库损坏且无法自动恢复，请从备份恢复"
+    except Exception as e:
+        log.error("数据库抢救异常: %s", e)
+        return False, "数据库损坏且无法自动恢复，请从备份恢复"
+
+
 class Store:
     def __init__(self, db_path=None):
         self.db_path = db_path or appdata_dir("data", "memory.db")
         os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
+        # 启动容错：已有库先检测完整性，损坏则尝试抢救（仅主库路径）
+        if db_path is None:
+            self.healthy, self.health_msg = ensure_healthy_db(self.db_path)
+        else:
+            self.healthy, self.health_msg = True, ""
+        # 迁移前快照（若之前健康，为迁移/使用留一致备份）
+        if db_path is None and os.path.exists(self.db_path):
+            try:
+                snapshot_db(self.db_path)
+            except Exception as e:
+                log.warning("数据库快照失败: %s", e)
         self._conn = sqlite3.connect(self.db_path)
         self._conn.row_factory = sqlite3.Row
         self._init()
