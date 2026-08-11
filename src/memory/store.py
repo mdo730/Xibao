@@ -233,6 +233,9 @@ class Store:
             source TEXT,
             status TEXT DEFAULT 'pending',
             created_at TEXT DEFAULT (datetime('now','localtime')))""")
+        # folder_tags 唯一索引（v11：不物化后防重复关联）
+        c.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_folder_tags_path_tag "
+                  "ON folder_tags(folder_path, tag_id)")
         ver = _current_schema_version(c)
         if ver is None:
             c.execute("INSERT INTO meta (key, value) VALUES ('schema_version', ?)",
@@ -672,7 +675,7 @@ class Store:
                 tid = id_map.get(r["tag_id"])
                 if tid:
                     self._conn.execute(
-                        "INSERT INTO folder_tags (folder_path, tag_id) VALUES (?,?)",
+                        "INSERT OR IGNORE INTO folder_tags (folder_path, tag_id) VALUES (?,?)",
                         (r["folder_path"], tid))
         else:
             # 合并：保留现有标签，按 (父链, 名字) 匹配，命中复用、缺失新建
@@ -695,13 +698,9 @@ class Store:
             for r in rels:
                 tid = id_map.get(r["tag_id"])
                 if tid:
-                    row = self._conn.execute(
-                        "SELECT 1 FROM folder_tags WHERE folder_path=? AND tag_id=?",
-                        (r["folder_path"], tid)).fetchone()
-                    if not row:
-                        self._conn.execute(
-                            "INSERT INTO folder_tags (folder_path, tag_id) VALUES (?,?)",
-                            (r["folder_path"], tid))
+                    self._conn.execute(
+                        "INSERT OR IGNORE INTO folder_tags (folder_path, tag_id) VALUES (?,?)",
+                        (r["folder_path"], tid))
         # 导入备注名（replace 已清空；merge 覆盖同名路径）
         for a in aliases:
             self.set_alias(a.get("path") or "", a.get("alias") or "")
