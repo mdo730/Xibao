@@ -184,9 +184,8 @@ function renderTaskGrid() {
     // 异常模式：异常标签单独标红一行（一个文件最多一个异常标签）
     const abnormalHtml = isReview ? '' :
       `<div class="review-card-abnormal"><span class="review-tag-warn">⚠️ ${escHtml(g.tags[0] ? g.tags[0].name : '')}</span></div>`;
-    const selBadge = isReview ? '' : `<span class="review-card-selbadge">${sel ? '✓' : ''}</span>`;
     card.innerHTML = `
-      <div class="cell-content">${display}${selBadge}</div>
+      <div class="cell-content">${display}</div>
       <div class="cell-name">${escHtml(basename(g.path))}</div>
       ${abnormalHtml}
       <div class="review-card-meta muted">${isReview ? '来源: ' + escHtml(srcs) : '此标签现在是父级，编辑弹窗不可勾选'}</div>
@@ -213,7 +212,10 @@ function renderTaskGrid() {
     grid.appendChild(card);
     idx++;
   }
-  if (!isReview) renderOrphanActionBar();
+  if (!isReview) {
+    grid.style.paddingBottom = '70px';  // 避免被 fixed 底部栏遮挡
+    renderOrphanActionBar();
+  }
 }
 
 function basename(p) {
@@ -237,15 +239,22 @@ function renderOrphanActionBar() {
     bar = document.createElement('div');
     bar.id = 'orphan-action-bar';
     bar.className = 'orphan-action-bar';
-    const body = document.getElementById('explorer-body');
-    body.appendChild(bar);
+    document.body.appendChild(bar);
   }
+  // fixed 定位：只占文件列表区域宽度（文件树右缘 → 标签树左缘）
+  const ft = document.getElementById('filetree-panel');
+  const tp = document.getElementById('tag-panel');
+  let left = 0, right = 0;
+  if (ft) left = ft.getBoundingClientRect().right;
+  if (tp) right = window.innerWidth - tp.getBoundingClientRect().left;
+  bar.style.left = left + 'px';
+  bar.style.right = right + 'px';
   const total = pendingGroups.length;
   const sel = selected.size;
   bar.innerHTML = `<span class="orphan-bar-count">已选 <strong>${sel}</strong> / ${total} 项</span>
     <span class="orphan-bar-actions">
-      <button class="action-btn danger" onclick="orphanRemoveSelected()">🗑 移除异常标签</button>
       <button class="action-btn ok" onclick="orphanRemoveThenAdd()">🟢 移除并添加标签</button>
+      <button class="action-btn danger" onclick="orphanRemoveSelected()">🗑 移除异常标签</button>
       <button class="action-btn" onclick="exitTaskView()">✕ 退出</button>
     </span>`;
 }

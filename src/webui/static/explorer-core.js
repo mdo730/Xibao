@@ -313,6 +313,11 @@ function updateSelectionUI() {
     const k = cells[i].dataset.key;
     if (k) cells[i].classList.toggle('sel', selected.has(k));
   }
+  // 异常模式下同步底部操作栏的"已选 N 项"
+  if (typeof taskViewMode !== 'undefined' && taskViewMode === 'orphan' &&
+      typeof renderOrphanActionBar === 'function') {
+    renderOrphanActionBar();
+  }
 }
 
 // ---- 数据加载 ----

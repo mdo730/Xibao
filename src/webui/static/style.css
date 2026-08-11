@@ -343,16 +343,14 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: #0b57d0
 .review-card .cell-name { font-size: 12px; }
 .review-tag { display: inline-block; background: #eef2ff; color: #3a5bd9; border-radius: 4px; padding: 1px 8px; font-size: 12px; }
 /* 异常模式：图标按钮 + 异常标签标红 */
-.icon-btn { width: 28px; height: 28px; border: 1px solid #e0e0e0; border-radius: 6px; background: #fff; cursor: pointer; font-size: 14px; display: inline-flex; align-items: center; justify-content: center; transition: background .15s; }
+.icon-btn { min-width: 34px; height: 26px; padding: 0 10px; border: 1px solid #e0e0e0; border-radius: 6px; background: #fff; cursor: pointer; font-size: 13px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; transition: background .15s; }
 .icon-btn:hover { background: #f2f2f2; }
 .icon-btn.danger:hover { background: #fdecea; border-color: #f5c6c0; }
 .review-card-abnormal { margin-top: 4px; }
 .review-tag-warn { display: inline-block; background: #fdecea; color: #c62828; border: 1px solid #f5c6c0; border-radius: 4px; padding: 1px 8px; font-size: 12px; font-weight: 600; }
-/* 异常模式：多选角标 + 底部操作栏 */
+/* 异常模式：多选 + 底部操作栏（fixed 贴视口底部，只占文件列表宽度） */
 .review-card.sel { outline: 2px solid #2196f3; outline-offset: -2px; }
-.review-card-selbadge { position: absolute; top: 4px; left: 4px; width: 20px; height: 20px; border-radius: 50%; background: #2196f3; color: #fff; font-size: 13px; display: flex; align-items: center; justify-content: center; z-index: 2; }
-.review-card-actions-icons { display: flex; gap: 8px; margin-top: 6px; justify-content: center; }
-.orphan-action-bar { position: sticky; bottom: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; background: #fff; border-top: 1px solid #e0e0e0; margin-top: 12px; z-index: 20; box-shadow: 0 -2px 8px rgba(0,0,0,.05); }
+.orphan-action-bar { position: fixed; bottom: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; background: #fff; border-top: 1px solid #e0e0e0; z-index: 30; box-shadow: 0 -2px 8px rgba(0,0,0,.05); }
 .orphan-bar-count { font-size: 13px; color: #333; }
 .orphan-bar-count strong { color: #2196f3; }
 .orphan-bar-actions { display: flex; gap: 8px; }
