@@ -179,6 +179,7 @@
       </span>
     </div>
     <div class="settings-body">
+      <div class="settings-col">
       <div class="settings-block">
         <h4>🔍 搜索</h4>
         <p class="muted" id="set-search-status">检测中…</p>
@@ -219,15 +220,6 @@
       </div>
 
       <div class="settings-block">
-        <h4>🗂 文件树</h4>
-        <label style="display:flex;align-items:center;gap:8px;margin-top:6px">
-          <input type="checkbox" id="set-known-folders" style="width:auto" onchange="saveKnownFoldersSetting()"> 显示系统文件夹（桌面/下载/图片/视频/文档/音乐/公共等）
-        </label>
-        <div id="set-known-folders-list" style="margin-top:10px"></div>
-        <p class="muted" style="margin-top:8px">勾选要在文件树顶部显示的系统文件夹；不勾总开关则全部隐藏，只显示磁盘。</p>
-      </div>
-
-      <div class="settings-block">
         <h4>💊 筛选胶囊</h4>
         <div style="margin-top:10px">
           <div class="muted" style="margin-bottom:4px">显示位置：</div>
@@ -240,6 +232,17 @@
           <button onclick="setChipsSize('md')" class="mini" id="btn-chips-size-md">中</button>
           <button onclick="setChipsSize('lg')" class="mini" id="btn-chips-size-lg">大</button>
         </div>
+      </div>
+      </div>
+
+      <div class="settings-col">
+      <div class="settings-block">
+        <h4>🗂 文件树</h4>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:6px">
+          <input type="checkbox" id="set-known-folders" style="width:auto" onchange="saveKnownFoldersSetting()"> 显示系统文件夹（桌面/下载/图片/视频/文档/音乐/公共等）
+        </label>
+        <div id="set-known-folders-list" style="margin-top:10px"></div>
+        <p class="muted" style="margin-top:8px">勾选要在文件树顶部显示的系统文件夹；不勾总开关则全部隐藏，只显示磁盘。</p>
       </div>
 
       <div class="settings-block">
@@ -268,6 +271,7 @@
           <button onclick="importTags()">导入标签备份</button>
           <span id="set-tags-status" class="search-feedback"></span>
         </div>
+      </div>
       </div>
 
       <div class="version-info">西煲 <strong>v0.6.0</strong></div>

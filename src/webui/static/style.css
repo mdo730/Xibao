@@ -549,8 +549,11 @@ li.jstree-node li.jstree-node li.jstree-node > a.jstree-anchor { font-size: 13px
 .help-doc details p + p { padding-top: 0; }
 .help-doc strong { color: #1b1b1b; }
 
-#settings-modal .modal-box { height: 85vh; }
-#settings-modal .settings-body { overflow-y: auto; flex: 1; min-height: 0; padding-right: 6px; }
+#settings-modal .modal-box { height: 85vh; width: 880px; max-width: 96vw; }
+#settings-modal .settings-body { overflow-y: auto; flex: 1; min-height: 0; padding-right: 6px; display: grid; grid-template-columns: 1fr 1fr; gap: 0 28px; align-content: start; }
+#settings-modal .settings-col { min-width: 0; }
+#settings-modal .settings-col + .settings-col { border-left: 1px solid #f0f0f0; padding-left: 28px; }
+#settings-modal .version-info { grid-column: 1 / -1; }
 
 /* ---- 帮助浮窗（可拖动、可关闭） ---- */
 .help-float { position: fixed; left: 24px; top: 70px; width: 380px; max-height: 70vh; background: #fff; border: 1px solid #ddd; border-radius: 10px; box-shadow: 0 8px 30px rgba(0,0,0,.18); display: flex; flex-direction: column; z-index: 600; overflow: hidden; }
