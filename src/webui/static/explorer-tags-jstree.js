@@ -91,6 +91,14 @@ function renderTagTree() {
         const idx = (parentNode.children || []).indexOf(data.node.id);
         position = idx >= 0 ? idx : 0;
       } catch (e) { position = data.position || 0; }
+      // 记录原位置（供用户取消时回滚）
+      const oldParent = data.old_parent && data.old_parent !== '#' ? data.old_parent : null;
+      let oldParentId = 0;
+      if (oldParent) {
+        const op = oldParent.indexOf('tag_') === 0 ? parseInt(oldParent.replace('tag_', '')) : NaN;
+        oldParentId = isNaN(op) ? 0 : op;
+      }
+      let oldPosition = data.old_position || 0;
 
       function persist() {
         return fetch('/api/tags/' + tid + '/move', {
@@ -99,12 +107,32 @@ function renderTagTree() {
           body: JSON.stringify({parent_id: newParentId, order: position}),
         }).then(r => r.json()).catch(() => ({ok: false, error: '网络错误'}));
       }
+      function rollback() {
+        // 撤回：移回原父级原位置
+        return fetch('/api/tags/' + tid + '/move', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({parent_id: oldParentId, order: oldPosition}),
+        }).catch(() => {}).then(() => loadTags());
+      }
 
       persist().then(d => {
         if (!d.ok) {
           alert('移动失败: ' + (d.error || ''));
           loadTags();
           return;
+        }
+        // 移动可能使某些文件上的标签"无法管理"（新父级变父级，编辑弹窗禁用）→ 预警
+        if (d.affected && d.affected.length) {
+          const names = d.affected.slice(0, 5).map(o => '· ' + o.path.split('/').pop() + ' → ' + o.tag).join('\n');
+          const more = d.affected.length > 5 ? '\n…等 ' + d.affected.length + ' 个' : '';
+          const ok = confirm('⚠️ 本次移动使 ' + d.affected.length + ' 个文件上的标签「无法管理」：\n\n' +
+            names + more + '\n\n这些文件直接挂了该标签，但它现在是父级，编辑弹窗里无法勾选/取消。\n\n' +
+            '确定继续？（会显示在「⚠️ 标签异常」中）\n取消则撤回本次拖动。');
+          if (!ok) {
+            rollback();
+            return;
+          }
         }
         // 移动成功刷新标签树（计数已由后端 CTE 重算）
         loadTags();

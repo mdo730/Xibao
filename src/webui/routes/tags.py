@@ -75,7 +75,8 @@ def api_tag_delete(tag_id):
 @tags_bp.post("/api/tags/<int:tag_id>/move")
 def api_tag_move(tag_id):
     """移动标签到新父级 + 同级位置（拖动排序）。
-    不物化：改层级只动 parent_id，无孤儿副作用。"""
+    不物化：改层级只动 parent_id。返回移动后受影响的"无法管理挂载"（新父级变父级后，
+    原本直接挂它的文件在编辑弹窗失效），供前端预警。"""
     data = request.get_json(force=True) or {}
     new_parent_id = int(data.get("parent_id") or 0)
     order = int(data.get("order") or 0)
@@ -87,7 +88,13 @@ def api_tag_move(tag_id):
             if new_parent_id == tag_id or new_parent_id in desc:
                 return jsonify({"ok": False, "error": "不能移动到自身或其子标签下"}), 400
         store.move_tag(tag_id, new_parent_id, order)
-        return jsonify({"ok": True})
+        # 移动后统计受影响的挂载（新父级下"无法管理"的）
+        affected = []
+        if new_parent_id:
+            tags = {t["id"]: t for t in store.all_tags()}
+            affected = [{"path": p, "tag": tags[tid]["name"]}
+                        for p, tid in store.unmanageable_links() if tid == new_parent_id]
+        return jsonify({"ok": True, "affected": affected})
     finally:
         store.close()
 
