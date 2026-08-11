@@ -132,9 +132,9 @@ function renderTagTree() {
             rollback();
             return;
           }
-          // 确定：刷新标签树（警示区会自动显示新孤儿）
-          loadTags();
         }
+        // 无论是否产生孤儿，移动成功都刷新标签树统计（含祖先链同步后的计数）
+        loadTags();
       });
     }).on('ready.jstree', function () {
       styleTagColorDots();
