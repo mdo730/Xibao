@@ -20,33 +20,34 @@
 
 Python 3.13 + Flask + 原生 JS + jsTree + jQuery + SortableJS。
 本地资源管理器（非采集工具）。PyInstaller onedir + Inno Setup 打包。
-pystray（托盘）+ psutil + Pillow + av（PyAV，视频缩略图解码）。测试：pytest（100 个用例）。
+pystray（托盘）+ psutil + Pillow + av（PyAV，视频缩略图解码）。测试：pytest（107 个用例）。
 
 ## 核心功能
 
 - **资源管理器**：真实文件树（惰性加载）、网格/列表视图、排序（文件夹恒在前）、面包屑、网格缩放、快速访问收藏、目录树宽度可拖拽/缩进封顶
 - **导航源**：文件树顶部接入系统 Known Folders（桌面/下载/图片/视频/文档/音乐等，纯 ctypes SHGetKnownFolderPath，自动处理 OneDrive 重定向），设置可开关/勾选；快速访问并入文件树（系统文件夹下方+分隔线隔开磁盘）
 - **搜索**：Everything（可选）→ 本地索引分层兜底；搜索同时匹配文件名与备注名
-- **标签体系**：无限级标签树 + 颜色、单击筛选、🔖 多选筛选（and/else）、打标签自动继承父级、筛选方案、标签备份导出/导入、多选追加标签、**拖动排序持久化**（sort_order + move_tag + 祖先链同步）、标签异常（孤儿挂载）检测与清理
+- **标签体系**：无限级标签树 + 颜色、单击筛选、🔖 多选筛选（and/else）、筛选方案、标签备份导出/导入（含颜色）、多选追加标签、**拖动排序持久化**（sort_order + move_tag）、**稳定文件标识**（文件移动/重命名后标签自动跟随）、标签异常（父级标签无法在弹窗管理）检测与清理
 - **备注名（Alias）**：文件/文件夹可设"仅西煲内显示"名称，不改真实文件名；Q 键切换文件名/备注名显示模式；显示时带底色（设置可调）；随标签备份导出/导入
 - **缩略图**：系统 COM 缩略图优先（PSD/PDF/Office 等也出图）+ PyAV 视频帧回退；系统文件图标（exe 等按完整路径缓存）；网格视图懒加载 + 失败回退图标
-- **外部写入 API（v0.6.0）**：`POST /api/v1/tags/apply` 批量打标 + 安全区路径白名单 + 审核队列（工具栏「🕓 待审核」/「⚠️ 标签异常」统一缩略图视图）；参考 PhotoPrism FirstOrCreate 幂等
+- **外部写入 API（v0.6.0）**：`POST /api/v1/tags/apply` 批量打标 + 安全区路径白名单 + 审核队列（工具栏「🕓 待审核」统一缩略图视图）；参考 PhotoPrism FirstOrCreate 幂等
 - **快捷操作**：框选/Ctrl/Shift 多选、右键菜单（含外部工具：7-Zip/WinRAR/Bandizip/Locale Emulator/Everything 解压/LE 运行）、拖拽移动、空格 QuickLook 预览、快捷键（方向键/F2/F/E/R/Q/Shift+F/Delete/空格/Ctrl+A/Esc）
-- **设置**：搜索配置、动画开关、标签迁移开关、备注名底色、筛选胶囊位置/尺寸、文件树系统文件夹、外部写入安全区、清理无效挂载、帮助浮窗、更新日志浮窗、版本号、作者 @parukamun（bilibili 链接）、免费声明
+- **设置**：搜索配置、动画开关、标签迁移开关、备注名底色、筛选胶囊位置/尺寸、文件树系统文件夹、外部写入安全区、清理无效挂载/重绑定失效、检查更新、帮助浮窗、更新日志浮窗、版本号、作者 @parukamun（bilibili 链接）、免费声明
 
 ## 关键代码位置
 
 - `launcher.py`：端口/残留/托盘/代理逻辑（顶层 import pystray/psutil/PIL）
 - `src/webui/app.py`：瘦身版——页面路由 + Blueprint 注册 + `_seed_default_tags()` + `_auto_backup()` + `_resource_path()` + 启动
 - `src/webui/routes/`：**API 按域拆分（Blueprint，v0.6.0 重构第 1 步）**
-  - `tags.py`：标签树 + 文件夹标签关联 + 备注名（alias）+ 拖动排序（move）+ 孤儿挂载检测/清理 + 无效挂载清理
+  - `tags.py`：标签树 + 文件夹标签关联 + 备注名（alias）+ 拖动排序（move）+ 标签异常检测/清理 + 无效挂载清理 + 重绑定失效
   - `files.py`：目录浏览 + 文件操作 + 文件树 + 图片/缩略图服务 + 外部工具探测/执行
   - `search.py`：Everything/本地索引分层搜索 + 索引构建
-  - `settings.py`：health/help-seen/meta KV + 标签导入导出
+  - `settings.py`：health/help-seen/meta KV + 标签导入导出 + 检查更新
   - `external.py`：**外部标签写入 API（v0.6.0 第 8 步）**——`/api/v1/tags/apply` + 安全区 + 审核队列
   - `__init__.py`：`ALL_BLUEPRINTS` 统一注册
   - 注意：routes 内相对导入是三级 `from ...memory` / `from ...images`（routes 在 webui 下）
-- `src/memory/store.py`：SQLite + meta KV + 标签树/祖先链 + path_aliases（备注名）+ **schema 迁移机制**（`_MIGRATIONS` + 备份 + 回滚，当前 SCHEMA_VERSION=10）+ `tag_counts()`（标签数量）+ move_tag/祖先链同步/孤儿检测/审核队列
+- `src/memory/store.py`：SQLite + meta KV + 标签树 + path_aliases（备注名）+ **schema 迁移机制**（`_MIGRATIONS` + 备份 + 回滚，当前 SCHEMA_VERSION=12）+ `tag_counts()`（递归 CTE 含子孙计数）+ move_tag + file_id 关联（`_record_file_id`/`resolve_path`）+ 审核队列
+- `src/images/file_id.py`：稳定文件标识（st_ino+st_dev 编码、OpenFileById 反查路径、按卷判文件系统信任级）
 - `src/images/thumbnail.py`：多后端缩略图（系统 COM 优先 + PyAV 视频帧回退，缓存 `%LOCALAPPDATA%\Xibao\thumbnails` + 后台生成队列）
 - `src/images/shell_thumbnail.py`：系统 COM 缩略图/图标（纯 ctypes 参考 yasb，`SIIGBF_ICONONLY` 取 exe 图标按完整路径缓存）
 - `src/images/known_folders.py`：系统 Known Folders（纯 ctypes 调 SHGetKnownFolderPath，自动处理 OneDrive 重定向）
@@ -56,11 +57,11 @@ pystray（托盘）+ psutil + Pillow + av（PyAV，视频缩略图解码）。�
 - `src/webui/static/explorer-tags-jstree.js`：标签树 jsTree 交互（筛选链去冗余、chips 颜色/位置/尺寸、标签数量显示、拖动排序 + 孤儿预警 + 祖先链刷新）
 - `src/webui/static/explorer-core.js`：右键菜单、属性、导航历史（navTo/navBack/navUp 统一正斜杠）、备注名显示工具（nameHtml/displayName/aliasMode）、currentCtx（优先选中项）
 - `src/webui/static/explorer-tree.js`：文件树 + 宽度拖拽（localStorage）+ 缩进封顶 + Known Folders 渲染
-- `src/webui/static/review.js`：**待审核/标签异常统一任务视图**（缩略图卡片 + 接受/拒绝 + 修改/移除标签）
+- `src/webui/static/review.js`：**待审核/标签异常统一任务视图**（缩略图卡片 + 接受/拒绝 + 异常修改/移除标签）
 - `src/webui/static/explorer-keys.js`：快捷键（含 Q 切显示模式、R 设置备注名）
 - `src/webui/static/settings.js`：设置弹窗 + 帮助/更新日志浮窗 + 备注名底色调色板 + 清理无效挂载
 - `src/webui/templates/images.html`：主界面 + 设置弹窗 + 帮助/更新日志浮窗
-- `tests/`：pytest（test_store / test_library / test_migration / test_external_api / test_tag_move / test_known_folders，100 个用例）
+- `tests/`：pytest（test_store / test_library / test_migration / test_external_api / test_tag_move / test_known_folders / test_update，107 个用例）
 
 ## 当前版本
 
@@ -105,7 +106,7 @@ python build_package.py   # 一键：PyInstaller onedir + Inno Setup 安装包
 ```
 
 - spec 用 `collect_submodules('pystray')` 确保托盘模块收集；`hiddenimports` 含 `av`（PyAV，其 hook 自动收集 DLL）
-- 版本号在 `build_package.py`（APP_VERSION）+ `app.py` health + `images.html`
+- 版本号唯一来源：`src/common.py APP_VERSION`（build_package.py / health / 更新检查共用）
 - 前端 JS/CSS 改动后记得更新 `images.html` 里的 `?v=N` / `base.html` 的 style.css 版本号（防浏览器缓存）
 - 新功能需同步：更新日志浮窗（changelog-float）；帮助文档仅同步用户可感知的功能（如备注名/快捷键），"润物细无声"类（视频缩略图）不进帮助
 
@@ -114,7 +115,7 @@ python build_package.py   # 一键：PyInstaller onedir + Inno Setup 安装包
 - 测试时关闭 clash 代理（否则 requests 访问 127.0.0.1 会 500）
 - 托盘图标可能被折叠进系统托盘溢出区（点 ↑ 箭头）
 - 源码跑 `src.webui.app` 无托盘（托盘在 launcher.py）；打包 exe 有托盘
-- 全程离线，无任何出站网络请求（Everything 用 Win32 IPC，浏览器打开走 127.0.0.1）
+- 全程离线，无后台联网（Everything 用 Win32 IPC，浏览器打开走 127.0.0.1；唯一出站联网是「检查更新」，仅在用户主动点击时请求 GitHub Releases）
 - **GitHub 推送需 Clash 代理**：`git config --global http.proxy http://127.0.0.1:7897`（git push 前 Clash 要开着）
 - 测试环境：Playwright 无头浏览器可用（`.venv` 已装），可自动化验证前端
 
