@@ -174,6 +174,29 @@
   </div>
 </div>
 
+<!-- 复制标签树弹窗 -->
+<div id="copy-tagtree-modal" class="modal hidden" onclick="if(event.target===this)closeCopyTagTree()">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h3>📋 复制标签树</h3>
+      <button class="modal-x" onclick="closeCopyTagTree()" title="关闭">×</button>
+    </div>
+    <div class="settings-body" style="overflow-y:auto;min-height:0">
+      <p class="muted" style="font-size:12px">把「<span id="copy-tagtree-folder">该文件夹</span>」的目录结构生成标签树。选择挂载点（生成的标签挂到哪个标签下）：</p>
+      <div id="copy-tagtree-tree" style="border:1px solid #e5e5e5;border-radius:8px;padding:8px;min-height:120px;max-height:260px;overflow-y:auto"></div>
+      <label style="display:flex;align-items:center;gap:8px;margin-top:12px">
+        <input type="checkbox" id="copy-tagtree-apply" style="width:auto" checked> 自动给文件夹内文件打上对应标签
+      </label>
+      <p class="muted" style="font-size:12px;margin-top:4px">开启后，每个文件会打上其所在目录链的标签（如 作品A 下的文件 → 作品A / 作者A / 顶层 标签）。</p>
+      <div id="copy-tagtree-status" class="muted" style="margin-top:8px;font-size:12px"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="ghost" id="copy-tagtree-close-btn" onclick="closeCopyTagTree()">取消</button>
+      <button onclick="confirmCopyTagTree()">生成标签树</button>
+    </div>
+  </div>
+</div>
+
 <!-- 设置弹窗 -->
 <div id="settings-modal" class="modal hidden" onclick="if(event.target===this)closeSettingsModal()">
   <div class="modal-box">

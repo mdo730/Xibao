@@ -597,6 +597,7 @@ function showCtx(e, path, kind, type) {
   let html = isMulti ? '<div onclick="ctxTag()">追加标签… <span class="ctx-key">E</span></div>' : '<div onclick="ctxTag()">编辑标签… <span class="ctx-key">E</span></div>';
   html += '<div onclick="ctxClearTags()">清除标签</div>';
   if (kind === 'folder') html += '<div onclick="ctxAddQuick()">⭐ 添加到快速访问</div>';
+  if (kind === 'folder') html += '<div onclick="ctxCopyTagTree()">📋 复制标签树</div>';
   if (kind === 'file') html += '<div onclick="ctxOpen()">打开</div>';
   html += '<div onclick="ctxOpenFolder()">打开所在文件夹</div>';
   if (!isMulti) html += '<div onclick="ctxSetAlias()">设置备注名 <span class="ctx-key">R</span></div>';
@@ -733,6 +734,72 @@ async function ctxClearTags() {
     } catch (e) { /* 单条失败继续 */ }
   }
   loadTags(); refresh();
+}
+// 复制标签树：把文件夹目录结构转成标签树（v0.6.1）
+function ctxCopyTagTree() {
+  hideContextMenus();
+  if (!ctxItem || ctxItem.kind !== 'folder') return;
+  copyTagTreePath = ctxItem.path;
+  const modal = document.getElementById('copy-tagtree-modal');
+  modal.classList.remove('hidden');
+  // 渲染挂载点标签树（jsTree，单选）
+  const container = document.getElementById('copy-tagtree-tree');
+  if ($) {
+    const data = [{id: 'tag_0', text: '📁 根级（不挂到任何标签下）', children: buildCopyTree(0)}];
+    if (!$(container).data('jstree')) {
+      $(container).jstree({
+        core: {data, multiple: false, themes: {name: 'default', dots: true, icons: false}},
+        plugins: [],
+      }).on('ready.jstree', function () {
+        try { $(container).jstree(true).open_all(); } catch (e) {}
+      });
+    } else {
+      const t = $(container).jstree(true);
+      t.settings.core.data = data;
+      t.refresh();
+      try { t.open_all(); } catch (e) {}
+    }
+  }
+  // 打标开关默认开
+  document.getElementById('copy-tagtree-apply').checked = true;
+  document.getElementById('copy-tagtree-status').textContent = '';
+}
+function buildCopyTree(parentId) {
+  return tagChildren(parentId).map(t => ({
+    id: 'tag_' + t.id,
+    text: t.name,
+    children: tagChildren(t.id).length ? buildCopyTree(t.id) : [],
+  }));
+}
+let copyTagTreePath = null;
+async function confirmCopyTagTree() {
+  const status = document.getElementById('copy-tagtree-status');
+  const applyTags = document.getElementById('copy-tagtree-apply').checked;
+  // 挂载点：选中的标签 id（未选=根级）
+  let parentId = 0;
+  if ($ && $('#copy-tagtree-tree').data('jstree')) {
+    const t = $('#copy-tagtree-tree').jstree(true);
+    const sel = t.get_selected();
+    if (sel && sel.length) {
+      const pid = parseInt(String(sel[0]).replace('tag_', ''));
+      parentId = isNaN(pid) ? 0 : pid;
+    }
+  }
+  status.textContent = '⏳ 正在生成标签树…';
+  try {
+    const r = await fetch('/api/tags/from-folder', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({path: copyTagTreePath, parent_tag_id: parentId, apply_tags: applyTags}),
+    });
+    const d = await r.json();
+    if (!d.ok) { status.textContent = '❌ ' + (d.error || '生成失败'); return; }
+    status.textContent = `✅ 生成 ${d.tags_created} 个新标签（复用 ${d.tags_merged}）`;
+    document.getElementById('copy-tagtree-close-btn').click();
+    loadTags(); refresh();
+  } catch (e) { status.textContent = '❌ ' + e.message; }
+}
+function closeCopyTagTree() {
+  document.getElementById('copy-tagtree-modal').classList.add('hidden');
 }
 function ctxCopyPath() {
   hideContextMenus();
