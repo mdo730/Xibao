@@ -5,6 +5,10 @@
 let taskViewMode = null;   // 'review' | 'orphan' | null
 let pendingGroups = [];
 let taskViewSeq = 0;       // 切换序号：防止异步 refresh 覆盖新视图
+// 异常模式分页（9252+ 文件不卡顿）
+let orphanPage = 0;
+const orphanLimit = 100;
+let orphanTotal = 0;
 
 // ---------- 角标（按钮仅在有内容时显示） ----------
 
@@ -68,6 +72,9 @@ function exitTaskView() {
   if (banner) banner.remove();
   const bar = document.getElementById('orphan-action-bar');
   if (bar) bar.remove();
+  const pager = document.getElementById('orphan-pager');
+  if (pager) pager.remove();
+  orphanPage = 0; orphanTotal = 0;
   if (typeof refresh === 'function') refresh();
 }
 
@@ -95,10 +102,11 @@ function _orphanToGroups(items) {
 }
 
 async function enterOrphanView(seq) {
-  const r = await fetch('/api/tags/orphans');
+  const r = await fetch(`/api/tags/orphans?offset=${orphanPage * orphanLimit}&limit=${orphanLimit}`);
   const d = await r.json();
   if (seq !== undefined && seq !== taskViewSeq) return;
   if (!d.ok) { alert('加载标签异常失败: ' + (d.error || '')); taskViewMode = null; return; }
+  orphanTotal = d.total || d.count || 0;
   pendingGroups = _orphanToGroups(d.items);
   selected.clear();   // 进入任务视图清空旧选择，避免计数残留
   updateOrphanOrderedKeys();
@@ -106,6 +114,7 @@ async function enterOrphanView(seq) {
   if (btn) btn.classList.add('active');
   renderTaskBanner();
   renderTaskGrid();
+  renderOrphanPager();
   refreshOrphanBadge();
 }
 
@@ -259,12 +268,52 @@ function renderOrphanActionBar() {
   bar.style.right = right + 'px';
   const total = pendingGroups.length;
   const sel = selected.size;
-  bar.innerHTML = `<span class="orphan-bar-count">已选 <strong>${sel}</strong> / ${total} 项</span>
+  bar.innerHTML = `<span class="orphan-bar-count">已选 <strong>${sel}</strong> 项 / 本页 ${total}</span>
     <span class="orphan-bar-actions">
+      <button class="action-btn" onclick="orphanSelectPage()">☑ 全选本页</button>
       <button class="action-btn ok" onclick="orphanRemoveThenAdd()">🟢 移除并添加标签</button>
       <button class="action-btn danger" onclick="orphanRemoveSelected()">🗑 移除异常标签</button>
       <button class="action-btn" onclick="exitTaskView()">✕ 退出</button>
     </span>`;
+}
+
+// 异常分页条
+function renderOrphanPager() {
+  let pager = document.getElementById('orphan-pager');
+  if (!pager) {
+    pager = document.createElement('div');
+    pager.id = 'orphan-pager';
+    pager.className = 'flatten-pager';
+    document.getElementById('explorer-body').appendChild(pager);
+  }
+  const totalPages = Math.max(1, Math.ceil(orphanTotal / orphanLimit));
+  const cur = orphanPage + 1;
+  pager.innerHTML = `<span class="muted">共 ${orphanTotal} 个异常 · 第 ${cur}/${totalPages} 页</span>
+    <button class="mini" ${cur <= 1 ? 'disabled' : ''} onclick="orphanPageMove(-1)">← 上一页</button>
+    <button class="mini" ${cur >= totalPages ? 'disabled' : ''} onclick="orphanPageMove(1)">下一页 →</button>`;
+}
+
+function orphanPageMove(delta) {
+  const next = orphanPage + delta;
+  if (next < 0 || next * orphanLimit >= orphanTotal) return;
+  orphanPage = next;
+  selected.clear();
+  refreshReviewView();
+  const body = document.getElementById('explorer-body');
+  if (body) body.scrollTop = 0;
+}
+
+// 全选本页
+function orphanSelectPage() {
+  if (!pendingGroups.length) return;
+  // 切换：若本页已全选则清空，否则全选本页
+  const pageAll = pendingGroups.every(g => selected.has(g.path));
+  if (pageAll) {
+    pendingGroups.forEach(g => selected.delete(g.path));
+  } else {
+    pendingGroups.forEach(g => selected.add(g.path));
+  }
+  renderTaskGrid();
 }
 
 function orphanRemoveSelected() {
@@ -365,10 +414,13 @@ async function refreshReviewView() {
     if (d.ok) pendingGroups = d.items || [];
     refreshPendingBadge();
   } else if (taskViewMode === 'orphan') {
-    const r = await fetch('/api/tags/orphans');
+    const r = await fetch(`/api/tags/orphans?offset=${orphanPage * orphanLimit}&limit=${orphanLimit}`);
     const d = await r.json();
     if (seq !== taskViewSeq) return;
-    if (d.ok) pendingGroups = _orphanToGroups(d.items);
+    if (d.ok) {
+      orphanTotal = d.total || d.count || 0;
+      pendingGroups = _orphanToGroups(d.items);
+    }
     updateOrphanOrderedKeys();
     refreshOrphanBadge();
   }
@@ -379,6 +431,7 @@ async function refreshReviewView() {
   }
   if (taskViewMode) {
     renderTaskBanner();
+    renderOrphanPager();
     renderTaskGrid();
   }
 }

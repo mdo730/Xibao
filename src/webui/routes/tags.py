@@ -101,16 +101,22 @@ def api_tag_move(tag_id):
 
 @tags_bp.get("/api/tags/orphans")
 def api_tags_orphans():
-    """列出"无法管理"挂载：文件挂了当前是父级的标签（leafOnly 禁用，无法在弹窗取消）。"""
+    """列出"无法管理"挂载：文件挂了当前是父级的标签（leafOnly 禁用，无法在弹窗取消）。
+    支持分页：?offset=0&limit=100，返回 total。"""
     store = Store()
     try:
         import os as _os
+        offset = max(0, int(request.args.get("offset") or 0))
+        limit = min(500, max(1, int(request.args.get("limit") or 100)))
         links = store.unmanageable_links()
+        total = len(links)
+        page = links[offset:offset + limit]
         tags = {t["id"]: t for t in store.all_tags()}
         items = [{"path": p, "tag_id": tid, "tag": tags[tid]["name"] if tid in tags else "?",
                   "is_folder": _os.path.isdir(p)}
-                 for p, tid in links]
-        return jsonify({"ok": True, "count": len(items), "items": items})
+                 for p, tid in page]
+        return jsonify({"ok": True, "count": total, "total": total,
+                        "offset": offset, "limit": limit, "items": items})
     finally:
         store.close()
 
