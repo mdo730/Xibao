@@ -372,6 +372,131 @@ class Store:
         tid = self.add_tag(name, parent_id)
         return tid, True
 
+    def import_folder_to_tags(self, root, parent_tag_id=0, apply_tags=False, max_depth=None):
+        """复制标签树：把磁盘目录结构转成标签树（v0.6.1）。
+
+        root: 要复制的文件夹绝对路径
+        parent_tag_id: 生成标签挂到哪个标签下（0=根级）
+        apply_tags: 是否给文件自动打上其所在目录链的标签（可选）
+        max_depth: 最大递归深度（None=全递归）
+
+        返回 {tags_created, tags_merged, files_tagged, dirs, tag_map}。
+        批量建标签：单次 walk + 一次事务，防 N+1。
+        """
+        import os as _os
+        import re as _re
+
+        def _norm_name(name):
+            """目录名 → 标签名：清理非法字符/首尾空白。"""
+            n = (name or "").strip()
+            n = _re.sub(r'[/\\#]', '-', n)
+            n = n.strip('.') or '未命名'
+            return n[:100]
+
+        # 阶段1：单次 walk 收集目录结构（复用 junction 去重思路）
+        dirs = []          # [(rel_depth, relpath_tuple)]
+        files = []         # [(rel_dir_tuple, file_abs)]
+        seen = set()       # (st_dev, st_ino) 去重，防 junction 循环
+        _skip_dirs = {'$RECYCLE.BIN', 'System Volume Information', '$Recycle.Bin',
+                      '.git', '.thumbnails', 'Thumbs.db'}
+        for dirpath, dirnames, filenames in _os.walk(root):
+            # 深度控制
+            rel = _os.path.relpath(dirpath, root)
+            depth = 0 if rel == '.' else rel.count(_os.sep) + 1
+            if max_depth is not None and depth > max_depth:
+                dirnames[:] = []
+                continue
+            # junction 去重 + 跳过系统目录
+            try:
+                st = _os.stat(dirpath)
+                key = (st.st_dev, st.st_ino)
+            except OSError:
+                key = None
+            if key and key in seen:
+                dirnames[:] = []
+                continue
+            if key:
+                seen.add(key)
+            dirnames[:] = [d for d in dirnames if d not in _skip_dirs]
+            # 记录目录（相对 root 的路径元组，统一带 root 名作顶层前缀）
+            root_name = _norm_name(_os.path.basename(_os.path.normpath(root)))
+            if rel == '.':
+                rel_tuple = (root_name,)
+            else:
+                rel_tuple = (root_name,) + tuple(_norm_name(s) for s in rel.split(_os.sep))
+            if rel_tuple:
+                dirs.append((depth, rel_tuple))
+            for fn in filenames:
+                if fn in _skip_dirs:
+                    continue
+                files.append((rel_tuple, _os.path.join(dirpath, fn)))
+
+        # 阶段2：批量建标签树（一次事务）
+        tags_created = 0
+        tags_merged = 0
+        tag_map = {}   # rel_tuple -> tag_id
+        if dirs:
+            # 已存在标签缓存（同父同名）
+            rows = self._conn.execute(
+                "SELECT id, name, parent_id FROM image_tags").fetchall()
+            existing = {(r["parent_id"], r["name"]): r["id"] for r in rows}
+            for _d, rel_tuple in sorted(dirs):
+                parent_id = parent_tag_id
+                for i in range(len(rel_tuple)):
+                    prefix = rel_tuple[:i + 1]
+                    if prefix in tag_map:
+                        parent_id = tag_map[prefix]
+                        continue
+                    name = _norm_name(rel_tuple[i])
+                    key = (parent_id, name)
+                    if key in existing:
+                        tid = existing[key]
+                        tags_merged += 1
+                    else:
+                        so_row = self._conn.execute(
+                            "SELECT COALESCE(MAX(sort_order),-1)+1 AS so FROM image_tags "
+                            "WHERE parent_id=?", (parent_id,)).fetchone()
+                        cur = self._conn.execute(
+                            "INSERT INTO image_tags (name, parent_id, sort_order) VALUES (?,?,?)",
+                            (name, parent_id, so_row["so"]))
+                        tid = cur.lastrowid
+                        tags_created += 1
+                        existing[key] = tid
+                    tag_map[prefix] = tid
+                    parent_id = tid
+
+        # 阶段3：可选打标（给文件打其目录链上的标签）
+        files_tagged = 0
+        if apply_tags and files:
+            for rel_tuple, fpath in files:
+                # 目录链标签 = 沿路径从根到该目录的每个目录标签
+                chain_ids = []
+                for i in range(1, len(rel_tuple) + 1):
+                    tid = tag_map.get(rel_tuple[:i])
+                    if tid:
+                        chain_ids.append(tid)
+                if not chain_ids:
+                    continue
+                fpath = fpath.replace("\\", "/")
+                existing_ids = {r["tag_id"] for r in self._conn.execute(
+                    "SELECT tag_id FROM folder_tags WHERE folder_path=?", (fpath,))}
+                for tid in chain_ids:
+                    if tid not in existing_ids:
+                        self._conn.execute(
+                            "INSERT OR IGNORE INTO folder_tags (folder_path, tag_id) VALUES (?,?)",
+                            (fpath, tid))
+                files_tagged += 1
+
+        self._conn.commit()
+        return {
+            "tags_created": tags_created,
+            "tags_merged": tags_merged,
+            "files_tagged": files_tagged,
+            "dirs": len(dirs),
+            "files": len(files),
+        }
+
+
     def rename_tag(self, tag_id, name):
         self._conn.execute("UPDATE image_tags SET name=? WHERE id=?", (name, tag_id))
         self._conn.commit()
