@@ -336,13 +336,63 @@ async function refresh() {
   if (currentPath) params.set('path', currentPath);
   currentTagIds.forEach(t => params.append('tag_id', t));
   if (currentTagIds.length > 1 && typeof _filterRule !== 'undefined') params.set('rule', _filterRule);
-  params.set('limit', 500);  // 大目录分批，避免卡顿
+  const lim = pageLimit();
+  params.set('limit', lim);
+  if (browseOffset > 0) params.set('offset', browseOffset);
   const r = await fetch('/api/images?' + params.toString());
   data = await r.json();
   if (!data.ok) { itemGrid.innerHTML = `<p class="muted">加载失败: ${data.error || ''}</p>`; return; }
   renderAddress();
   render();
   if (typeof expandToPath === 'function') expandToPath(currentPath);
+  // 大目录自动分页（目录浏览且 total > limit 时显示分页条；筛选不过分页）
+  if (!currentTagIds.length && data.total > lim) {
+    browseRegister(lim, data.total);
+  } else {
+    browseUnregister();
+  }
+}
+
+// ---- 普通浏览分页（大目录自动进入分页，全局） ----
+let browseOffset = 0;
+function browseRegister(limit, total) {
+  pgRegister('browse', {
+    get: () => ({total, offset: browseOffset, limit}),
+    prev: () => browseGo(browseOffset - limit),
+    next: () => browseGo(browseOffset + limit),
+    jump: (off) => browseGo(off),
+    size: (newLimit) => { browseOffset = 0; refresh(); },
+  });
+  renderBrowsePager();
+}
+function browseUnregister() {
+  browseOffset = 0;
+  if (typeof pgRemove === 'function') pgRemove('browse');
+}
+function browseGo(offset) {
+  const maxOff = Math.max(0, ((data.total || 0) - 1));
+  browseOffset = Math.max(0, Math.min(offset, maxOff));
+  refresh();
+  const body = document.getElementById('explorer-body');
+  if (body) body.scrollTop = 0;
+}
+function renderBrowsePager() {
+  const body = document.getElementById('explorer-body');
+  let top = document.getElementById('pg-top-browse');
+  if (!top) {
+    top = document.createElement('div');
+    top.id = 'pg-top-browse';
+    top.className = 'flatten-pager pg-sticky';
+    body.insertBefore(top, body.firstChild);
+  }
+  let bottom = document.getElementById('pg-bottom-browse');
+  if (!bottom) {
+    bottom = document.createElement('div');
+    bottom.id = 'pg-bottom-browse';
+    bottom.className = 'flatten-pager';
+    body.appendChild(bottom);
+  }
+  renderPager('browse');
 }
 
 let _allItems = [];

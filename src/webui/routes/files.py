@@ -26,8 +26,9 @@ def api_images():
     tag_ids = request.args.getlist("tag_id")
     try:
         limit = int(request.args.get("limit") or 0)
+        offset = max(0, int(request.args.get("offset") or 0))
     except ValueError:
-        limit = 0
+        limit, offset = 0, 0
     try:
         if tag_ids and not path:
             # 标签筛选：返回挂这些标签的真实路径（文件+文件夹）
@@ -57,7 +58,7 @@ def api_images():
             finally:
                 store.close()
         else:
-            data = lib.list_dir(path, limit=limit)
+            data = lib.list_dir(path, limit=limit, offset=offset)
         # 注入备注名（一次性查映射，避免逐条 N+1）
         store = Store()
         try:
@@ -70,7 +71,8 @@ def api_images():
         data["images"] = data.get("files", [])
         return jsonify({"ok": True, "dir": data["dir"],
                         "folders": data["folders"], "files": data.get("files", []),
-                        "images": data["images"], "truncated": data.get("truncated", False)})
+                        "images": data["images"], "truncated": data.get("truncated", False),
+                        "total": data.get("total", 0)})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 400
 

@@ -37,3 +37,25 @@ def test_list_dir_small_no_truncate(tmp_path):
     assert res["truncated"] is False
     assert {f["name"] for f in res["folders"]} == {"a_dir"}
     assert {f["name"] for f in res["files"]} == {"b.txt"}
+
+
+def test_list_dir_pagination_offset(tmp_path):
+    """大目录分页：offset/limit 切片 + total，文件夹保送在前。"""
+    root = tmp_path / "page"
+    root.mkdir()
+    for i in range(30):
+        (root / f"file_{i:02d}.txt").write_text("x")
+    (root / "z_dir").mkdir()
+    # 第一页：limit=10，offset=0（文件夹 z_dir 保送在前，占第1位）
+    r1 = library.list_dir(str(root), limit=10, offset=0)
+    assert r1["total"] == 31
+    assert r1["truncated"] is True
+    assert {f["name"] for f in r1["folders"]} == {"z_dir"}   # 文件夹必在首页
+    # 第二页 offset=10：不应含 z_dir
+    r2 = library.list_dir(str(root), limit=10, offset=10)
+    assert r2["folders"] == []
+    assert len(r2["files"]) == 10
+    # 最后一页 offset=30
+    r3 = library.list_dir(str(root), limit=10, offset=30)
+    assert r3["folders"] == []
+    assert len(r3["files"]) == 1   # ordered[30] = file_29（z_dir 占第0位）

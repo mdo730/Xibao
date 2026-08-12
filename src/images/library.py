@@ -135,22 +135,22 @@ def _safe_path(path):
     return p
 
 
-def list_dir(path, limit=0):
+def list_dir(path, limit=0, offset=0):
     """列出某目录下的文件夹与文件（全类型）。path 为空表示"此电脑"。
 
-    limit > 0 时只列前 limit 条，且文件夹不生成预览（加快大目录）。
-    返回 {"folders": [...], "files": [...], "dir": target, "truncated": bool}
+    limit > 0 时只列 offset 起 limit 条（分页），文件夹保送在前；文件夹不生成预览。
+    返回 {"folders": [...], "files": [...], "dir": target, "truncated": bool, "total": int}
     """
     if not path:
-        return {"folders": _drive_list(), "files": [], "dir": ""}
+        return {"folders": _drive_list(), "files": [], "dir": "", "total": 0, "truncated": False}
     target = _safe_path(path)
     if not os.path.isdir(target):
-        return {"folders": [], "files": [], "dir": target}
+        return {"folders": [], "files": [], "dir": target, "total": 0, "truncated": False}
     try:
         entries = sorted(os.listdir(target))
     except OSError as e:
         log.warning("读取目录失败 %s: %s", target, e)
-        return {"folders": [], "files": [], "dir": target}
+        return {"folders": [], "files": [], "dir": target, "total": 0, "truncated": False}
     total = len(entries)
     truncated = limit > 0 and total > limit
     is_dir = {}
@@ -159,12 +159,14 @@ def list_dir(path, limit=0):
             is_dir[name] = os.path.isdir(os.path.join(target, name))
         except OSError:
             is_dir[name] = False
-    if truncated:
-        # 截断前先把文件夹分离保送，保证"文件夹恒在前"不受截断影响
+    if limit > 0:
+        # 分页：先分离文件夹保送在前，再按 offset/limit 切片
         folders_first = [n for n in entries if is_dir.get(n)]
         files_only = [n for n in entries if not is_dir.get(n)]
-        entries = (folders_first + files_only)[:limit]
-        truncated = True
+        ordered = folders_first + files_only
+        page = ordered[offset:offset + limit]
+        entries = page
+        truncated = offset + limit < total
     folders, files = [], []
     for name in entries:
         p = os.path.join(target, name)
@@ -176,7 +178,8 @@ def list_dir(path, limit=0):
                 files.append({"name": name, "path": p, "type": ft, **_file_meta(p)})
         except OSError:
             continue
-    return {"folders": folders, "files": files, "dir": target, "truncated": truncated}
+    return {"folders": folders, "files": files, "dir": target, "truncated": truncated,
+            "total": total}
 
 
 def _drive_list():
