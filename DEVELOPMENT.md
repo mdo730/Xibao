@@ -6,13 +6,13 @@
 ## 当前状态
 
 - **当前版本：v0.6.0（开发中，重构进行中）**
-- 项目根目录：`E:\AIproject`
-- 虚拟环境：`E:\AIproject\.venv\Scripts\python.exe`
+- 项目根目录：仓库根（下文以 `<root>` 表示）
+- 虚拟环境：`<root>\.venv\Scripts\python.exe`
 - 源码运行：`start.bat` 或 `.venv\Scripts\python.exe -m src.webui.app --port 8788`
 - 托盘入口：`.venv\Scripts\python.exe launcher.py`
 - GitHub：https://github.com/mdo730/Xibao（main 分支，MIT）
 - 打包脚本：`build_package.py`（PyInstaller onedir + Inno Setup）
-- Inno Setup：环境变量 `ISCC` 指定，或放项目内 `inno\ISCC.exe`（本地开发：`C:\Users\<user>\AppData\Local\Temp\opencode\inno\InnoSetup6\ISCC.exe`）
+- Inno Setup：环境变量 `ISCC` 指定，或放项目内 `inno\ISCC.exe`（本地开发用解压到临时目录的 InnoSetup6）
 - 图标：项目内 `icon.ico`（可用 `XIBAO_ICON` 覆盖）
 - 数据目录：`%APPDATA%\Xibao\`（SQLite，标签/索引/备份）；缩略图缓存：`%LOCALAPPDATA%\Xibao\thumbnails\`
 
