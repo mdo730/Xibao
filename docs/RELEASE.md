@@ -1,7 +1,7 @@
 # 西煲 (Xibao) — 发布流程
 
 > 发布执行细则。发布前按顺序执行，全部通过才可发布。
-> AGENTS.md / AGENTS2.md 只保留检查要点，详细步骤见本文件。
+> AGENTS.md 只保留检查要点，详细步骤见本文件。
 
 ## 1. 前置检查
 
@@ -54,26 +54,10 @@ python build_package.py
 ## 7. GitHub 发布
 
 - 提交代码（`git add -A` + commit + `git push origin main`）
-- 创建 Release（可用 git 凭证里的 PAT 调 GitHub API，或 `gh release create`）：
-  - tag / name：`v<APP_VERSION>`
-  - body：更新日志（与 changelog-float 一致的用户视角文案）
-  - 上传安装包：`dist/Xibao_Setup_<APP_VERSION>.exe`
+- 创建 Release（二选一）：
+  - **gh CLI**（推荐）：`gh release create v<APP_VERSION> --title "v<APP_VERSION>" --notes "<更新日志>" dist/Xibao_Setup_<APP_VERSION>.exe`
+  - **GitHub API**：`POST /repos/<owner>/<repo>/releases`（需带 `repo` 权限的 token），然后 `POST /repos/<owner>/<repo>/releases/<id>/assets` 上传安装包
+- tag / name：`v<APP_VERSION>`
+- body：更新日志（与 changelog-float 一致的用户视角文案）
 
-### 常用 GitHub API 命令（无 gh CLI 时）
-
-```powershell
-# 从 git 凭证拿 token
-$out = "protocol=https`nhost=github.com`n" | & git credential fill 2>&1
-$pat = ($out | Select-String '^password=').ToString().Replace('password=','')
-
-# 创建 release
-$json = '{"tag_name":"v0.6.1","name":"v0.6.1","body":"...","draft":false,"prerelease":false}'
-Invoke-RestMethod -Uri "https://api.github.com/repos/mdo730/Xibao/releases" -Method Post `
-  -Headers @{ Authorization = "Bearer $pat" } -Body $json -ContentType "application/json; charset=utf-8"
-
-# 上传安装包
-Invoke-RestMethod -Uri "https://uploads.github.com/repos/mdo730/Xibao/releases/<id>/assets?name=Xibao_Setup_0.6.1.exe" `
-  -Method Post -Headers @{ Authorization = "Bearer $pat" } -InFile "dist\Xibao_Setup_0.6.1.exe"
-```
-
-> 提示：推送 GitHub 可能需要代理（`git config --global http.proxy http://127.0.0.1:7897`），git push 前 Clash 要开着。
+> 提示：若网络需代理，git push 前配好代理（如 `git config --global http.proxy http://<代理>:<端口>`）。
