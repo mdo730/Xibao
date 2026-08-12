@@ -277,20 +277,19 @@ function setFilterMode(rule) {
   if (el) el.classList.add('active');
 })();
 
-// ---- 活动筛选 chips 条（仅筛选模式显示；位置与尺寸可在设置切换） ----
-const CHIPS_POS_KEY = 'xibao_chips_pos';   // 'tree'(标签树顶) | 'top'(地址栏下)
+// ---- 活动筛选 chips 条（仅筛选模式显示；尺寸可在设置切换） ----
+const CHIPS_POS_KEY = 'xibao_chips_pos';   // 位置固定为标签树顶（v0.6.1 移除地址栏下方方案）
 const CHIPS_SIZE_KEY = 'xibao_chips_size'; // 'sm' | 'md' | 'lg'
-function chipsPos() { return localStorage.getItem(CHIPS_POS_KEY) === 'top' ? 'top' : 'tree'; }
+function chipsPos() { return 'tree'; }
 function chipsSize() { const s = localStorage.getItem(CHIPS_SIZE_KEY); return ['sm', 'md', 'lg'].includes(s) ? s : 'md'; }
 function chipsContainers() {
-  return [document.getElementById('tag-filter-chips'), document.getElementById('tag-filter-chips-top')];
+  return [document.getElementById('tag-filter-chips')];
 }
 function renderFilterChips() {
   const active = _filterMode && currentTagIds.length;
   chipsContainers().forEach(wrap => {
     if (!wrap) return;
-    const isTop = wrap.id === 'tag-filter-chips-top';
-    const showHere = active && (chipsPos() === 'top') === isTop;
+    const showHere = active;
     if (!showHere) {
       wrap.innerHTML = '';
       wrap.classList.add('hidden');

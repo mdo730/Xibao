@@ -270,18 +270,11 @@
 
       <div class="settings-block">
         <h4>💊 筛选胶囊</h4>
-        <div style="margin-top:10px;display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start">
-          <div>
-            <div class="muted" style="margin-bottom:4px">显示位置：</div>
-            <button onclick="setChipsPos('tree')" class="mini" id="btn-chips-pos-tree">标签树顶</button>
-            <button onclick="setChipsPos('top')" class="mini" id="btn-chips-pos-top">地址栏下方</button>
-          </div>
-          <div>
-            <div class="muted" style="margin-bottom:4px">尺寸：</div>
-            <button onclick="setChipsSize('sm')" class="mini" id="btn-chips-size-sm">小</button>
-            <button onclick="setChipsSize('md')" class="mini" id="btn-chips-size-md">中</button>
-            <button onclick="setChipsSize('lg')" class="mini" id="btn-chips-size-lg">大</button>
-          </div>
+        <div style="margin-top:10px">
+          <div class="muted" style="margin-bottom:4px">尺寸：</div>
+          <button onclick="setChipsSize('sm')" class="mini" id="btn-chips-size-sm">小</button>
+          <button onclick="setChipsSize('md')" class="mini" id="btn-chips-size-md">中</button>
+          <button onclick="setChipsSize('lg')" class="mini" id="btn-chips-size-lg">大</button>
         </div>
       </div>
       </div>
@@ -405,7 +398,7 @@
       <summary>⚙️ 常见设置</summary>
       <p><strong>动画</strong>：低配置电脑可关闭动画开关，界面更流畅。</p>
       <p><strong>标签迁移</strong>：开启后，用西煲移动/重命名文件时标签跟随到新位置（默认关闭）。另外即使文件被资源管理器等外部程序移动，西煲也能按文件 ID 自动找回标签（见「重绑定失效」）。</p>
-      <p><strong>筛选胶囊</strong>：可切换胶囊显示位置（标签树顶 / 地址栏下方）与尺寸（小/中/大）。</p>
+      <p><strong>筛选胶囊</strong>：可切换胶囊尺寸（小/中/大）。</p>
       <p><strong>文件树</strong>：可开关「显示系统文件夹」，并可勾选要保留的项（桌面/下载/图片等）；不常用的话可只留磁盘。</p>
       <p><strong>外部写入</strong>：插件/脚本可批量给文件打标签。安全区目录限定可操作范围（留空=关闭）；默认写入需在工具栏「🕓 待审核」确认后才生效。</p>
       <p><strong>标签备份</strong>：导出/导入标签，方便换电脑或备份。</p>
