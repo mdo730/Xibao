@@ -378,6 +378,15 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: #0b57d0
 .mini.danger { background: #fdecea; color: #c62828; }
 .mini.danger:hover { background: #fad5d1; }
 
+/* ---- 平铺文件夹 ---- */
+.flatten-banner { display: flex; align-items: center; gap: 12px; padding: 5px 12px; background: #eef6ff; border: 1px solid #b8d4f0; border-radius: 8px; font-size: 12px; margin-bottom: 10px; }
+.flatten-title { font-weight: 600; color: #0b57d0; }
+.flatten-type { display: flex; gap: 4px; }
+.flatten-banner .mini.active { background: #0b57d0; color: #fff; }
+.flatten-actions { margin-left: auto; display: flex; gap: 6px; }
+.flatten-pager { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 10px; margin-top: 10px; }
+.flatten-card .cell-meta { font-size: 11px; color: #999; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
 /* ---- 文件树分隔线 & 快速访问条目 ---- */
 .tree-sep { border-top: 1px solid #e2e2e2; margin: 6px 10px; }
 .quick-tree-item .tree-label { color: #7a5c2e; font-weight: 500; }

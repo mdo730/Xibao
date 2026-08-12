@@ -322,6 +322,11 @@ function updateSelectionUI() {
 
 // ---- 数据加载 ----
 async function refresh() {
+  // 平铺模式下不走正常加载
+  if (typeof flattenMode !== 'undefined' && flattenMode) {
+    if (typeof loadFlatten === 'function') loadFlatten();
+    return;
+  }
   // 任务视图（待审核/标签异常）下不走正常加载，防止覆盖任务视图
   if (typeof taskViewMode !== 'undefined' && taskViewMode) {
     if (typeof refreshReviewView === 'function') refreshReviewView();
@@ -598,6 +603,7 @@ function showCtx(e, path, kind, type) {
   html += '<div onclick="ctxClearTags()">清除标签</div>';
   if (kind === 'folder') html += '<div onclick="ctxAddQuick()">⭐ 添加到快速访问</div>';
   if (kind === 'folder') html += '<div onclick="ctxCopyTagTree()">📋 复制标签树</div>';
+  if (kind === 'folder') html += '<div onclick="ctxFlattenFolder()">🔍 平铺文件夹</div>';
   if (kind === 'file') html += '<div onclick="ctxOpen()">打开</div>';
   html += '<div onclick="ctxOpenFolder()">打开所在文件夹</div>';
   if (!isMulti) html += '<div onclick="ctxSetAlias()">设置备注名 <span class="ctx-key">R</span></div>';
