@@ -95,3 +95,29 @@ def test_import_folder_illegal_chars(store, tmp_path):
     authorA = next(t for t in authors if t["name"] == "作者A")
     works = [t for t in tags if t["parent_id"] == authorA["id"]]
     assert any(t["name"] == "作品.X" for t in works)  # 点保留（不在非法字符集）
+
+
+def test_flatten_dir(tmp_path):
+    """平铺：递归列文件 + 类型过滤 + 分页。"""
+    from src.images import library as lib
+    root = tmp_path / "flat"
+    (root / "a").mkdir(parents=True)
+    (root / "b").mkdir()
+    (root / "a" / "1.jpg").write_text("x")
+    (root / "a" / "2.png").write_text("y")
+    (root / "b" / "3.mp4").write_text("z")
+    (root / "4.txt").write_text("t")
+    r = lib.flatten_dir(str(root))
+    assert r["total"] == 4
+    names = {i["name"] for i in r["items"]}
+    assert names == {"1.jpg", "2.png", "3.mp4", "4.txt"}
+    # 图片过滤
+    r_img = lib.flatten_dir(str(root), type_filter="image")
+    assert r_img["total"] == 2
+    # 分页
+    r_page = lib.flatten_dir(str(root), limit=2, offset=0)
+    assert len(r_page["items"]) == 2
+    assert r_page["total"] == 4
+    # 深度限制（depth=0 只直接子级）
+    r_d0 = lib.flatten_dir(str(root), max_depth=0)
+    assert r_d0["total"] == 1  # 只有 4.txt（root 直接子文件）
