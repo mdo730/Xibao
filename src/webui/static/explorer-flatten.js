@@ -12,7 +12,15 @@ function ctxFlattenFolder() {
 
 function enterFlatten(path) {
   flattenMode = true;
-  flattenState = {...flattenState, path, type: 'all', depth: null, offset: 0, sortKey: 'name', sortDir: 'asc'};
+  flattenState = {...flattenState, path, type: 'all', depth: null, offset: 0, sortKey: 'name', sortDir: 'asc', limit: pageLimit()};
+  // 注册分页 scope
+  pgRegister('flatten', {
+    get: () => ({total: flattenState.total, offset: flattenState.offset, limit: flattenState.limit}),
+    prev: () => flattenPage(-1),
+    next: () => flattenPage(1),
+    jump: (off) => flattenGoto(off),
+    size: (lim) => { flattenState.limit = lim; flattenState.offset = 0; loadFlatten(); },
+  });
   renderFlattenBanner();
   loadFlatten();
 }
@@ -21,6 +29,7 @@ function exitFlatten() {
   flattenMode = false;
   const banner = document.getElementById('flatten-banner');
   if (banner) banner.remove();
+  pgRemove('flatten');
   if (typeof refresh === 'function') refresh();
 }
 
@@ -98,21 +107,40 @@ function renderFlattenGrid(items) {
   }
 }
 
+// 平铺分页：顶部(置顶)+底部 两组，用通用组件
 function renderFlattenPager() {
-  const s = flattenState;
-  const totalPages = Math.max(1, Math.ceil(s.total / s.limit));
-  const curPage = Math.floor(s.offset / s.limit) + 1;
-  let bar = document.getElementById('flatten-pager');
   const grid = document.getElementById('item-grid');
-  if (!bar) {
-    bar = document.createElement('div');
-    bar.id = 'flatten-pager';
-    bar.className = 'flatten-pager';
-    grid.parentNode.appendChild(bar);
+  const body = document.getElementById('explorer-body');
+  let top = document.getElementById('pg-top-flatten');
+  if (!top) {
+    top = document.createElement('div');
+    top.id = 'pg-top-flatten';
+    top.className = 'flatten-pager pg-sticky';
+    // 插入到 explorer-body 顶部（sticky）
+    body.insertBefore(top, body.firstChild);
   }
-  bar.innerHTML = `<span class="muted">第 ${curPage} / ${totalPages} 页</span>
-    <button class="mini" ${curPage <= 1 ? 'disabled' : ''} onclick="flattenPage(-1)">← 上一页</button>
-    <button class="mini" ${curPage >= totalPages ? 'disabled' : ''} onclick="flattenPage(1)">下一页 →</button>`;
+  let bottom = document.getElementById('pg-bottom-flatten');
+  if (!bottom) {
+    bottom = document.createElement('div');
+    bottom.id = 'pg-bottom-flatten';
+    bottom.className = 'flatten-pager';
+    grid.parentNode.appendChild(bottom);
+  }
+  renderPager('flatten');
+}
+
+function flattenGoto(offset) {
+  flattenState.offset = Math.max(0, Math.min(offset, Math.max(0, flattenState.total - 1)));
+  loadFlatten();
+  const body = document.getElementById('explorer-body');
+  if (body) body.scrollTop = 0;
+}
+
+function flattenPage(delta) {
+  const s = flattenState;
+  const next = s.offset + delta * s.limit;
+  if (next < 0 || next >= s.total) return;
+  flattenGoto(next);
 }
 
 function flattenType(t) {
@@ -120,17 +148,6 @@ function flattenType(t) {
   flattenState.offset = 0;
   renderFlattenBanner();
   loadFlatten();
-}
-
-function flattenPage(delta) {
-  const s = flattenState;
-  const next = s.offset + delta * s.limit;
-  if (next < 0 || next >= s.total) return;
-  s.offset = next;
-  loadFlatten();
-  // 滚动到顶部
-  const body = document.getElementById('explorer-body');
-  if (body) body.scrollTop = 0;
 }
 
 // explorer-core.refresh() 拦截：平铺模式下不覆盖
