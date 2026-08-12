@@ -50,7 +50,7 @@
 | 分页套件（四场景共用） | `pagination.js` | `pgRegister/pgRenderBanner/pgRenderBottom/pgRemove/pgRender`、`pageLimit` |
 | 平铺模式 | `explorer-flatten.js` | `enterFlatten/loadFlatten/exitFlatten` |
 | 文件树 + 快速访问 | `explorer-tree.js` | `loadFileTree`、`expandToPath`、`loadQuickAccess` |
-| 标签树 jsTree 交互 | `explorer-tags-jstree.js` | `renderTagTree`、`selectTag/filterTag`、`updateTagCounts`、`updateTagActive`、`clearTagFilter`、`renderFilterChips`、`renderTagOptionTree`、`tagChildren`、`tagsToJsTree`、`stylePendingTags` |
+| 标签树 jsTree 交互 | `explorer-tags-jstree.js` | `renderTagTree`、`selectTag/filterTag`、`updateTagCounts`、`updateTagActive`、`clearTagFilter`、`renderFilterChips`、`renderTagOptionTree`、`tagChildren`、`tagsToJsTree`、`stylePendingTags`、**`loadTags`/`openTagColor`/`tagDelete`/`apiAddTag`/`PALETTE`/`selColor`（v0.6.1 重构归位）** |
 | 打标签弹窗 + 标签导入导出 | `explorer-tags.js` | `openTagModal/saveTagModal`（批量追加走 `/api/tags/append`）、`exportTags`、`importTags` |
 | 快捷键 | `explorer-keys.js` | `handleKey` |
 | 空格预览 | `explorer-quicklook.js` | `toggleQuickLook` |
@@ -64,12 +64,10 @@
 
 这些函数在"错误的文件"里，当前可运行但破坏模块边界。**扩展相关功能前先看这里**。
 
-1. **`explorer-tree.js`（文件树）混有标签管理**：`loadTags`、`openTagColor`、`tagDelete`、`apiAddTag`、`PALETTE`、`tagCtxItem`——属标签职责，应归入 `explorer-tags*.js`
-2. **`explorer-core.js` 过重**：1123 行含 83 个 `function` + 约 18 个箭头函数，右键菜单/属性/导航/备注名/框选全挤一起，长期应拆分
-3. **`settings.js` 隐式依赖**：`settings.js:446` 用 `typeof PALETTE !== 'undefined'` 判断（依赖 explorer-tree.js 恰好先加载且定义了 PALETTE）——**`explorer-schemes.js:201` 更脆，直接 `PALETTE.forEach` 无 typeof 保护，改 explorer-tree.js 的 PALETTE 会静默影响两个文件**
-4. **过时注释**：`explorer-tags-jstree.js` 顶部注释声称"覆盖 explorer-tree.js 中的手写渲染函数"，但手写版已不存在
-5. **空壳代码**：`explorer-flatten.js` 尾部 DOMContentLoaded 里 `const orig = window.refresh` 从未使用，注释自称"refresh() 拦截"但无实际作用
-6. **后端混放**：`routes/settings.py` 含标签导入导出（`/api/tags/export-to`、`/api/tags/import`），属标签职责，理论上应在 tags.py
+1. **`explorer-core.js` 过重**：1123 行含 83 个 `function` + 约 18 个箭头函数，右键菜单/属性/导航/备注名/框选全挤一起，长期应拆分
+2. **`settings.js` 隐式依赖**：`settings.js:446` 用 `typeof PALETTE !== 'undefined'` 判断（依赖 explorer-tags-jstree.js 恰好先加载且定义了 PALETTE）——`explorer-schemes.js` 已加同类 typeof 兜底
+3. **空壳代码**：`explorer-flatten.js` 尾部 DOMContentLoaded 里 `const orig = window.refresh` 从未使用，注释自称"refresh() 拦截"但无实际作用
+4. **后端混放**：`routes/settings.py` 含标签导入导出（`/api/tags/export-to`、`/api/tags/import`），属标签职责，理论上应在 tags.py
 
 ## 关键隐式依赖（改前必查）
 

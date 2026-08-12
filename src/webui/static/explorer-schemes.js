@@ -198,7 +198,13 @@ function schemeColor() {
   document.getElementById('tag-color-title').textContent = '设置方案「' + s.name + '」颜色';
   const palette = document.getElementById('tag-color-palette');
   palette.innerHTML = '';
-  PALETTE.forEach(c => {
+  const colors = (typeof PALETTE !== 'undefined') ? PALETTE : [
+    '#ecc889', '#f0c6c6', '#f5d9a8', '#d9f0c6', '#c6e8f0',
+    '#d9c6f0', '#f0e0c6', '#c6f0d9', '#f0c6e0', '#c6c6f0',
+    '#f5f5dc', '#ffd700', '#ff8c00', '#ff6347', '#32cd32',
+    '#00bfff', '#9370db', '#ff69b4', '#a9a9a9', '#000000',
+  ];
+  colors.forEach(c => {
     const sw = document.createElement('div');
     sw.className = 'color-swatch' + (c === selColor ? ' sel' : '');
     sw.style.background = c;
