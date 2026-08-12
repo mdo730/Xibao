@@ -291,6 +291,19 @@ def test_quick_access_remove_after_add(page, app):
     page.wait_for_timeout(300)
     menu_text = page.locator("#ctx-menu").inner_text()
     assert "从快速访问移除" in menu_text, "should offer remove for already-added folder"
+    # 点击移除，验证 localStorage 确实清掉
+    page.evaluate("""() => {
+      const sub = window._t2;
+      ctxItem = {path: sub, kind: 'folder'};
+      ctxRemoveQuick();
+    }""")
+    page.wait_for_timeout(300)
+    still = page.evaluate("""() => {
+      const sub = window._t2;
+      return JSON.parse(localStorage.getItem('xibao_quick_access') || '[]')
+        .some(x => x.path === sub.replace(/\\/+$/, ''));
+    }""")
+    assert still is False, "folder should be removed from quick access"
     # 清理
     page.evaluate("""() => {
       const list = JSON.parse(localStorage.getItem('xibao_quick_access') || '[]');

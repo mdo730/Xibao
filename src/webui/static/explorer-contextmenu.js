@@ -252,10 +252,12 @@ function ctxAddQuick() {
 function ctxRemoveQuick() {
   hideContextMenus();
   if (!ctxItem || ctxItem.kind !== 'folder') return;
-  if (typeof quickRemove === 'function') {
-    // quickRemove 读 quickCtxItem，先设好
-    if (typeof quickCtxItem !== 'undefined') window.quickCtxItem = {path: ctxItem.path};
-    quickRemove();
+  // 直接操作 localStorage 移除（和 addToQuickAccess 存的原样路径比对）
+  if (typeof loadQuickAccess === 'function' && typeof saveQuickAccess === 'function') {
+    const norm = ctxItem.path.replace(/\/+$/, '');
+    const list = loadQuickAccess().filter(x => x.path !== norm);
+    saveQuickAccess(list);
+    if (typeof loadFileTree === 'function') loadFileTree();
   }
 }
 async function ctxRename() {
