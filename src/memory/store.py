@@ -366,10 +366,16 @@ class Store:
             children.setdefault(t["parent_id"] or 0, []).append(t["id"])
         flat = {}
 
-        def build(tid):
+        def build(tid, seen=None):
+            if seen is None:
+                seen = set()
+            if tid in seen:
+                return set()
+            seen.add(tid)
             s = {tid}
             for c in children.get(tid, ()):
-                s |= build(c)
+                s |= build(c, seen)
+            seen.discard(tid)
             flat[tid] = frozenset(s)
             return s
 
@@ -385,8 +391,12 @@ class Store:
     def _descendants(self, tag_id):
         ids = []
         stack = [tag_id]
+        visited = set()
         while stack:
             cur = stack.pop()
+            if cur in visited:
+                continue
+            visited.add(cur)
             rows = self._conn.execute(
                 "SELECT id FROM image_tags WHERE parent_id=?", (cur,)).fetchall()
             for r in rows:
@@ -677,7 +687,7 @@ class Store:
     def export_tags(self):
         """导出标签树、关联与备注名为可序列化 dict。"""
         tags = [dict(r) for r in self._conn.execute(
-            "SELECT id, name, parent_id, sort_order FROM image_tags ORDER BY id").fetchall()]
+            "SELECT id, name, parent_id, sort_order, color FROM image_tags ORDER BY id").fetchall()]
         rels = [dict(r) for r in self._conn.execute(
             "SELECT folder_path, tag_id FROM folder_tags ORDER BY id").fetchall()]
         aliases = [dict(r) for r in self._conn.execute(
@@ -702,8 +712,8 @@ class Store:
             for t in tags:
                 parent = id_map.get(t.get("parent_id"))
                 cur = self._conn.execute(
-                    "INSERT INTO image_tags (name, parent_id, sort_order) VALUES (?,?,?)",
-                    (t["name"], parent or 0, t.get("sort_order") or 0))
+                    "INSERT INTO image_tags (name, parent_id, sort_order, color) VALUES (?,?,?,?)",
+                    (t["name"], parent or 0, t.get("sort_order") or 0, t.get("color")))
                 id_map[t["id"]] = cur.lastrowid
             for r in rels:
                 tid = id_map.get(r["tag_id"])
@@ -726,8 +736,8 @@ class Store:
                     id_map[t["id"]] = cands[0]
                 else:
                     cur = self._conn.execute(
-                        "INSERT INTO image_tags (name, parent_id, sort_order) VALUES (?,?,?)",
-                        (t["name"], parent or 0, t.get("sort_order") or 0))
+                        "INSERT INTO image_tags (name, parent_id, sort_order, color) VALUES (?,?,?,?)",
+                        (t["name"], parent or 0, t.get("sort_order") or 0, t.get("color")))
                     id_map[t["id"]] = cur.lastrowid
             for r in rels:
                 tid = id_map.get(r["tag_id"])

@@ -77,6 +77,7 @@ async function enterReviewView(seq) {
   if (seq !== undefined && seq !== taskViewSeq) return;
   if (!d.ok) { alert('加载待审核失败: ' + (d.error || '')); taskViewMode = null; return; }
   pendingGroups = d.items || [];
+  selected.clear();   // 进入任务视图清空旧选择
   const btn = document.getElementById('btn-pending-review');
   if (btn) btn.classList.add('active');
   renderTaskBanner();
@@ -87,6 +88,7 @@ function _orphanToGroups(items) {
   return (items || []).map(it => ({
     path: it.path,
     type: _guessType(it.path),
+    isFolder: !!it.is_folder,
     ids: [it.tag_id],
     tags: [{name: it.tag, parent: null, source: '父级标签'}],
   }));
@@ -98,6 +100,7 @@ async function enterOrphanView(seq) {
   if (seq !== undefined && seq !== taskViewSeq) return;
   if (!d.ok) { alert('加载标签异常失败: ' + (d.error || '')); taskViewMode = null; return; }
   pendingGroups = _orphanToGroups(d.items);
+  selected.clear();   // 进入任务视图清空旧选择，避免计数残留
   updateOrphanOrderedKeys();
   const btn = document.getElementById('btn-tag-orphans');
   if (btn) btn.classList.add('active');
@@ -106,10 +109,13 @@ async function enterOrphanView(seq) {
   refreshOrphanBadge();
 }
 
-// 异常模式：填充 orderedKeys（主界面 Shift 范围依赖它）
+// 异常模式：填充 orderedKeys + _allItems（主界面键盘导航/Shift 范围依赖它们）
 function updateOrphanOrderedKeys() {
   if (typeof orderedKeys !== 'undefined') {
     orderedKeys = pendingGroups.map(g => g.path);
+  }
+  if (typeof _allItems !== 'undefined') {
+    _allItems = pendingGroups.map(g => ({path: g.path, isFolder: false}));
   }
 }
 
@@ -166,7 +172,9 @@ function renderTaskGrid() {
     card.dataset.path = g.path;
     card.dataset.key = g.path;   // 复用主界面多选（selected/onItemClick/框选）
     let display = '';
-    if (g.type === 'image') {
+    if (g.isFolder) {
+      display = `<div class="cell-icon">📁</div>`;
+    } else if (g.type === 'image') {
       display = `<img class="cell-thumb" src="${relUrl(g.path)}" loading="lazy">`;
     } else if (g.type === 'video') {
       display = `<img class="cell-thumb video-thumb" src="/api/thumb?path=${encodeURIComponent(g.path)}&size=256" loading="lazy">`;

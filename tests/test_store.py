@@ -298,3 +298,30 @@ def test_tag_counts_dedupe_paths(store):
     counts = store.tag_counts()
     assert counts[a] == 1
     assert counts[b] == 1
+
+
+def test_export_import_preserves_color(store):
+    """备份导出/导入应保留标签颜色。"""
+    tid = store.add_tag("工作")
+    store.set_tag_color(tid, "#123456")
+    data = store.export_tags()
+    # 导入到新库
+    db2 = os.path.join(os.path.dirname(store.db_path), "mem_color.db")
+    s2 = Store(db2)
+    s2.import_tags(data, "replace")
+    tags2 = s2.all_tags()
+    assert any(t["name"] == "工作" and t["color"] == "#123456" for t in tags2)
+    s2.close()
+
+
+def test_flat_dict_cycle_safe(store):
+    """标签成环（脏数据）时 _flat_dict/_descendants 不应死循环。"""
+    a = store.add_tag("A")
+    b = store.add_tag("B")
+    # 手工制造环：A 的父是 B，B 的父是 A
+    store._conn.execute("UPDATE image_tags SET parent_id=? WHERE id=?", (b, a))
+    store._conn.execute("UPDATE image_tags SET parent_id=? WHERE id=?", (a, b))
+    store._conn.commit()
+    flat = store._flat_dict()
+    assert a in flat and b in flat
+    assert store._descendants(a) is not None  # 不抛异常/不死循环

@@ -8,6 +8,11 @@ function initSearch() {
   };
 }
 async function doSearch() {
+  // 任务视图（待审核/标签异常）下不搜索覆盖网格
+  if (typeof taskViewMode !== 'undefined' && taskViewMode) {
+    if (typeof refreshReviewView === 'function') refreshReviewView();
+    return;
+  }
   const q = searchInput.value.trim();
   if (!q) { clearTagFilter(); return; }
   // 检索中视觉反馈

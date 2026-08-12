@@ -104,9 +104,11 @@ def api_tags_orphans():
     """列出"无法管理"挂载：文件挂了当前是父级的标签（leafOnly 禁用，无法在弹窗取消）。"""
     store = Store()
     try:
+        import os as _os
         links = store.unmanageable_links()
         tags = {t["id"]: t for t in store.all_tags()}
-        items = [{"path": p, "tag_id": tid, "tag": tags[tid]["name"] if tid in tags else "?"}
+        items = [{"path": p, "tag_id": tid, "tag": tags[tid]["name"] if tid in tags else "?",
+                  "is_folder": _os.path.isdir(p)}
                  for p, tid in links]
         return jsonify({"ok": True, "count": len(items), "items": items})
     finally:
