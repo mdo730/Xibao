@@ -691,6 +691,55 @@ class Store:
             "SELECT folder_path, tag_id FROM folder_tags").fetchall()
         return [(r["folder_path"], r["tag_id"]) for r in rows if r["tag_id"] in parent_ids]
 
+    def move_orphans_to_uncategorized(self):
+        """把全部异常挂载移动到「未分类」子标签（v0.6.1）。
+
+        对每个异常 (path, 父标签X)：
+        1) 移除 path 上的 X
+        2) 在 X 下建/复用子标签「未分类」（每 X 各自建，不同父级下同名不冲突）
+        3) path 挂到「未分类」
+
+        返回 {moved: 处理的文件数, uncategorized_created: 新建未分类数}。
+        """
+        orphans = self.unmanageable_links()
+        if not orphans:
+            return {"moved": 0, "uncategorized_created": 0}
+        # 收集所有涉及的父标签
+        parent_ids = {tid for _p, tid in orphans}
+        # 为每个父标签建/复用「未分类」
+        uncat_by_parent = {}
+        uncat_created = 0
+        for pid in parent_ids:
+            row = self._conn.execute(
+                "SELECT id FROM image_tags WHERE name=? AND parent_id=?",
+                ("未分类", pid)).fetchone()
+            if row:
+                uncat_by_parent[pid] = row["id"]
+            else:
+                so_row = self._conn.execute(
+                    "SELECT COALESCE(MAX(sort_order),-1)+1 AS so FROM image_tags "
+                    "WHERE parent_id=?", (pid,)).fetchone()
+                cur = self._conn.execute(
+                    "INSERT INTO image_tags (name, parent_id, sort_order) VALUES (?,?,?)",
+                    ("未分类", pid, so_row["so"]))
+                uncat_by_parent[pid] = cur.lastrowid
+                uncat_created += 1
+        # 批量处理：对每个异常文件
+        moved = 0
+        for path, pid in orphans:
+            uncat_id = uncat_by_parent[pid]
+            # 移除异常父标签 X
+            self._conn.execute(
+                "DELETE FROM folder_tags WHERE folder_path=? AND tag_id=?",
+                (path, pid))
+            # 挂到未分类（幂等）
+            self._conn.execute(
+                "INSERT OR IGNORE INTO folder_tags (folder_path, tag_id) VALUES (?,?)",
+                (path, uncat_id))
+            moved += 1
+        self._conn.commit()
+        return {"moved": moved, "uncategorized_created": uncat_created}
+
     def clear_unmanageable_links(self):
         """一键清理：移除所有"无法管理"的挂载（文件上的父级标签关联）。
         返回清理条数。"""

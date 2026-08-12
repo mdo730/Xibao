@@ -201,3 +201,39 @@ def test_clear_unmanageable_for_path(store):
     n = store.clear_unmanageable_for_path("D:/a.png")
     assert n == 1
     assert store.unmanageable_links() == [("D:/b.png", parent)]
+
+
+def test_move_orphans_to_uncategorized(store):
+    """全部移动到未分类：移除异常父标签，在父标签下建未分类，文件挂过去。"""
+    img = store.add_tag("图片")
+    doc = store.add_tag("文档")
+    store.add_tag("壁纸", img)          # 让 图片 成为父级
+    store.add_tag("笔记", doc)          # 让 文档 成为父级
+    # 两个文件各挂一个父级标签 → 异常
+    store.set_folder_tags("D:/a.png", [img])
+    store.set_folder_tags("D:/b.png", [doc])
+    assert len(store.unmanageable_links()) == 2
+    res = store.move_orphans_to_uncategorized()
+    assert res["moved"] == 2
+    assert res["uncategorized_created"] == 2   # 图片>未分类, 文档>未分类
+    # 异常应清空
+    assert store.unmanageable_links() == []
+    # a.png 挂 图片>未分类
+    tags_a = store.tags_for_folder("D:/a.png")
+    names_a = {t["name"] for t in tags_a}
+    assert "未分类" in names_a
+    assert "图片" not in names_a
+    # b.png 挂 文档>未分类
+    tags_b = store.tags_for_folder("D:/b.png")
+    assert {t["name"] for t in tags_b} == {"未分类"}
+
+
+def test_move_orphans_uncategorized_reuse(store):
+    """已有未分类子标签时复用，不重复建。"""
+    img = store.add_tag("图片")
+    uncat = store.add_tag("未分类", img)   # 已存在
+    store.add_tag("壁纸", img)
+    store.set_folder_tags("D:/a.png", [img])
+    res = store.move_orphans_to_uncategorized()
+    assert res["uncategorized_created"] == 0  # 复用已有
+    assert store.tags_for_folder("D:/a.png")[0]["id"] == uncat

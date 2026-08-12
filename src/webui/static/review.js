@@ -268,9 +268,10 @@ function renderOrphanActionBar() {
   bar.style.right = right + 'px';
   const total = pendingGroups.length;
   const sel = selected.size;
-  bar.innerHTML = `<span class="orphan-bar-count">已选 <strong>${sel}</strong> 项 / 本页 ${total}</span>
+  bar.innerHTML = `<span class="orphan-bar-count">已选 <strong>${sel}</strong> 项 / 本页 ${total} · 共 ${orphanTotal} 异常</span>
     <span class="orphan-bar-actions">
       <button class="action-btn" onclick="orphanSelectPage()">☑ 全选本页</button>
+      <button class="action-btn ok" onclick="orphanMoveAllUncategorized()">📥 全部移动到未分类</button>
       <button class="action-btn ok" onclick="orphanRemoveThenAdd()">🟢 移除并添加标签</button>
       <button class="action-btn danger" onclick="orphanRemoveSelected()">🗑 移除异常标签</button>
       <button class="action-btn" onclick="exitTaskView()">✕ 退出</button>
@@ -314,6 +315,22 @@ function orphanSelectPage() {
     pendingGroups.forEach(g => selected.add(g.path));
   }
   renderTaskGrid();
+}
+
+// 全部移动到未分类：处理所有异常（跨页），保留归类+变可管理
+async function orphanMoveAllUncategorized() {
+  if (!orphanTotal) { alert('没有异常'); return; }
+  if (!confirm(`将全部 ${orphanTotal} 个异常移动到「未分类」子标签？\n\n每个异常标签下会自动新建/复用「未分类」子标签，异常文件移入后保留归类且可管理。`)) return;
+  try {
+    const r = await fetch('/api/tags/orphans/move-uncategorized', {method: 'POST'});
+    const d = await r.json();
+    if (!d.ok) { alert('操作失败: ' + (d.error || '')); return; }
+    alert(`已处理 ${d.moved} 个文件，新建 ${d.uncategorized_created} 个「未分类」标签`);
+    selected.clear();
+    refreshReviewView();
+    if (typeof loadTags === 'function') loadTags();
+    if (typeof refresh === 'function') refresh();
+  } catch (e) { alert('操作失败: ' + e.message); }
 }
 
 function orphanRemoveSelected() {

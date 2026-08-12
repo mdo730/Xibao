@@ -132,6 +132,17 @@ def api_tags_orphans_clear():
         store.close()
 
 
+@tags_bp.post("/api/tags/orphans/move-uncategorized")
+def api_tags_orphans_move_uncategorized():
+    """把全部异常挂载移动到各父标签下的「未分类」子标签（保留归类+变可管理）。"""
+    store = Store()
+    try:
+        res = store.move_orphans_to_uncategorized()
+        return jsonify({"ok": True, **res})
+    finally:
+        store.close()
+
+
 @tags_bp.post("/api/tags/orphans/clear-path")
 def api_tags_orphans_clear_path():
     """按路径清理"无法管理"挂载。支持单 path 或批量 paths 数组。"""
