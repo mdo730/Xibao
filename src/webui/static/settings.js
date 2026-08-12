@@ -216,6 +216,29 @@ async function rebindInvalidMounts() {
   }
 }
 
+// ---- 检查更新（GitHub Releases） ----
+async function checkUpdate() {
+  const el = document.getElementById('update-status');
+  if (!el) return;
+  el.innerHTML = '⏳ 正在检查更新…';
+  try {
+    const r = await fetch('/api/update/check');
+    const d = await r.json();
+    if (!d.ok) {
+      el.innerHTML = '❌ 检查失败：' + (d.error || '') + '（请确认网络可访问 GitHub）';
+      return;
+    }
+    if (!d.has_update) {
+      el.innerHTML = `✅ 已是最新版本（v${d.current}）`;
+      return;
+    }
+    el.innerHTML = `🎉 发现新版本 <strong>v${d.latest}</strong>（当前 v${d.current}）<br>
+      <a class="mini" href="${d.release_url}" target="_blank" rel="noopener" style="display:inline-block;margin-top:6px">⬇ 前往 GitHub 下载</a>`;
+  } catch (e) {
+    el.innerHTML = '❌ 检查失败：' + e.message;
+  }
+}
+
 // ---- 帮助浮窗（可拖动、可关闭） ----
 function openHelpFloat(center) {
   const f = document.getElementById('help-float');

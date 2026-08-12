@@ -1,18 +1,61 @@
-"""设置域 API：健康、帮助提示、meta KV、标签导入导出。"""
+"""设置域 API：健康、帮助提示、meta KV、标签导入导出、更新检查。"""
 import os
 import time as _time
 
 from flask import Blueprint, jsonify, request
 
+from ...common import APP_VERSION
 from ...memory.store import Store
 
 settings_bp = Blueprint("settings", __name__)
+
+# 更新源配置
+GITHUB_REPO = "mdo730/Xibao"            # owner/repo
+GITHUB_RELEASES_URL = "https://github.com/mdo730/Xibao/releases"
 
 
 @settings_bp.get("/api/health")
 def api_health():
     """健康探测：带唯一标记，用于残留进程识别（启动时）。"""
-    return jsonify({"ok": True, "app": "xibao", "version": "0.6.0"})
+    return jsonify({"ok": True, "app": "xibao", "version": APP_VERSION})
+
+
+@settings_bp.get("/api/update/check")
+def api_update_check():
+    """检查更新：请求 GitHub Releases 最新版，与当前版本对比。"""
+    import urllib.request
+    from packaging.version import Version
+    api = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+    try:
+        req = urllib.request.Request(api, headers={
+            "User-Agent": "Xibao/" + APP_VERSION,
+            "Accept": "application/vnd.github+json",
+        })
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = jsonify_data(resp)
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e), "current": APP_VERSION})
+    try:
+        latest_tag = (data.get("tag_name") or "").lstrip("v")
+        latest = Version(latest_tag)
+        current = Version(APP_VERSION)
+        has_update = latest > current
+        return jsonify({
+            "ok": True,
+            "current": APP_VERSION,
+            "latest": latest_tag,
+            "has_update": has_update,
+            "release_url": GITHUB_RELEASES_URL,
+            "notes": data.get("body") or "",
+            "published_at": data.get("published_at") or "",
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"版本解析失败: {e}", "current": APP_VERSION})
+
+
+def jsonify_data(resp):
+    import json
+    return json.loads(resp.read().decode("utf-8"))
 
 
 @settings_bp.get("/api/help-seen")

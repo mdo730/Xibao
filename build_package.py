@@ -21,7 +21,10 @@ APP_DIR = os.path.join(DIST_DIR, "Xibao")
 ISCC = os.environ.get("ISCC") or os.path.join(ROOT, "inno", "ISCC.exe")
 
 APP_NAME = "Xibao"
-APP_VERSION = "0.5.5"
+# 版本号唯一来源：src/common.py（与 health/更新检查保持一致）
+import sys
+sys.path.insert(0, ROOT)
+from src.common import APP_VERSION as APP_VERSION  # noqa: E402
 APP_PUBLISHER = "parukamun"
 APP_ID = "06DBF5F2-54AB-461E-A242-058B54BBD9CF"
 # 安装包图标：可用环境变量 XIBAO_ICON 覆盖，默认相对项目内 icon.ico

@@ -4,6 +4,9 @@ import os
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+# 应用版本号（唯一来源：health 接口、更新检查、打包脚本均引用这里）
+APP_VERSION = "0.6.0"
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s %(message)s",
