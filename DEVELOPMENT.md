@@ -76,7 +76,8 @@ pystray（托盘）+ psutil + Pillow + av（PyAV，视频缩略图解码）。�
   - ✅ 第 3 步 稳定文件标识：`src/images/file_id.py`（st_ino+st_dev 编码、OpenFileById 反查、按卷判文件系统信任级）；folder_tags/path_aliases 加 file_id + file_index 表（schema v12）；`resolve_path` ID 优先+路径兜底；标签筛选自动找回移动文件；cleanup-invalid 先反查再清理；设置「重绑定失效」
   - ✅ 第 7 步 层级展开重构：`folder_tags` 只存实际勾选（不物化祖先链）；查询期 `_flat_dict` 展开 + `tag_counts` 递归 CTE 含子孙计数；删除/移动标签零同步副作用；schema v11（物化数据规范化 + UNIQUE 索引）；孤儿功能移除
   - ✅ 第 9 步 标签筛选返回交互：`navHist/navIdx` 升级为 `{path, tagIds}` 视图快照（`_applyView`/`_pushView`），目录/标签筛选/清筛选共用返回栈，多标签每步进史、返回逐级回退；进目录=清空筛选
-  - 待做：第 10-11 步（英文界面、增量更新）
+  - ✅ 第 11 步 检查更新：`/api/update/check` 查 GitHub Releases + `packaging.version` 语义化比较；设置「🔄 检查更新」按钮；版本号统一到 `src/common.py APP_VERSION`
+  - 待做：第 10 步（英文界面适配）
 - 下一步见 ROADMAP.md
 - **工作原则**：实现前先检索 GitHub 找现成方案，能复用不重写；每完成一步 commit 留痕 + 更新接力文档
 
