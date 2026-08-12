@@ -153,13 +153,23 @@ def list_dir(path, limit=0):
         return {"folders": [], "files": [], "dir": target}
     total = len(entries)
     truncated = limit > 0 and total > limit
+    is_dir = {}
+    for name in entries:
+        try:
+            is_dir[name] = os.path.isdir(os.path.join(target, name))
+        except OSError:
+            is_dir[name] = False
     if truncated:
-        entries = entries[:limit]
+        # 截断前先把文件夹分离保送，保证"文件夹恒在前"不受截断影响
+        folders_first = [n for n in entries if is_dir.get(n)]
+        files_only = [n for n in entries if not is_dir.get(n)]
+        entries = (folders_first + files_only)[:limit]
+        truncated = True
     folders, files = [], []
     for name in entries:
         p = os.path.join(target, name)
         try:
-            if os.path.isdir(p):
+            if is_dir.get(name, False):
                 folders.append(_folder_card(p, with_preview=not truncated))
             elif os.path.isfile(p):
                 ft = file_type(name)
