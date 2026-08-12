@@ -21,11 +21,15 @@ def _attach_aliases(items, aliases):
 def api_search():
     """分层搜索：Everything IPC → 本地索引。任何异常自动降级，不崩溃。
 
+    支持 dir 参数限定当前目录（含子目录），避免每次都全局搜索。
     同时按备注名匹配：命中 alias 的路径也并入结果（去重）。
     """
     q = (request.args.get("q") or "").strip().lower()
     if not q:
         return jsonify({"ok": True, "folders": [], "files": []})
+    scope_dir = (request.args.get("dir") or "").replace("\\", "/").rstrip("/")
+    if scope_dir and not os.path.isdir(scope_dir):
+        scope_dir = ""
     store = Store()
     try:
         aliases = store.all_aliases()
@@ -36,7 +40,10 @@ def api_search():
         from ...images import everything_search
         ev_folders, ev_files = everything_search.search(q, limit=300)
         if ev_folders is not None:
-            return _search_result(ev_folders, ev_files, aliases, q, "everything")
+            if scope_dir:
+                ev_folders = [x for x in ev_folders if x["path"].replace("\\", "/").startswith(scope_dir + "/")]
+                ev_files = [x for x in ev_files if x["path"].replace("\\", "/").startswith(scope_dir + "/")]
+            return _search_result(ev_folders, ev_files, aliases, q, "everything", scope_dir)
     except Exception as e:
         log.warning("Everything 搜索异常，降级到本地索引: %s", e)
     # 第2层：本地索引（兜底）
@@ -46,16 +53,17 @@ def api_search():
             _start_index_build(mode="incremental")
             return jsonify({"ok": False, "building": True,
                             "error": "正在建立搜索索引（可能需要几分钟），请稍后再试。"})
-        folders, files = indexer.search(q)
+        folders, files = indexer.search(q, root=scope_dir or None)
         _start_index_build(mode="incremental")  # 后台补扫缺失盘
-        return _search_result(folders, files, aliases, q, "local")
+        return _search_result(folders, files, aliases, q, "local", scope_dir)
     except Exception as e:
         log.warning("本地索引搜索异常: %s", e)
         return jsonify({"ok": False, "error": f"搜索暂不可用: {e}"}), 500
 
 
-def _search_result(folders, files, aliases, q, engine):
-    """搜索结果：注入备注名 + 并入 alias 命中的路径（去重）。"""
+def _search_result(folders, files, aliases, q, engine, scope_dir=""):
+    """搜索结果：注入备注名 + 并入 alias 命中的路径（去重）。
+    scope_dir 非空时，alias 命中结果也限定在当前目录下。"""
     seen = set()
     merged_folders, merged_files = [], []
     for it in list(folders) + list(files):
@@ -72,6 +80,8 @@ def _search_result(folders, files, aliases, q, engine):
         if p in seen:
             continue
         seen.add(p)
+        if scope_dir and not p.replace("\\", "/").startswith(scope_dir + "/"):
+            continue
         if os.path.isdir(p):
             from ...images import library as lib
             merged_folders.append(lib._folder_card(p, with_preview=False))
@@ -102,6 +112,30 @@ def api_search_status():
 def _start_index_build(mode="full"):
     from ...images import indexer
     import threading
+
+    # 去重：已有构建在跑则跳过，避免并发重复整盘扫描
+    with indexer._lock:
+        if indexer._progress.get("running"):
+            return
+        if mode == "incremental" and indexer.ensure_index():
+            # 增量模式：仅补扫缺失盘；若已全部索引则无事可做
+            from ...images.indexer import _conn, _drives
+            c = _conn()
+            try:
+                missing = False
+                for d in _drives():
+                    row = c.execute(
+                        "SELECT COUNT(*) n FROM files WHERE path LIKE ?", (d + "%",)).fetchone()
+                    if not row or row[0] == 0:
+                        missing = True
+                        break
+                if not missing:
+                    c.close()
+                    return
+            except Exception:
+                c.close()
+                return
+            c.close()
 
     def _run():
         try:

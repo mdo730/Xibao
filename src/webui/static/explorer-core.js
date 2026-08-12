@@ -72,6 +72,10 @@ function relUrl(p) {
   const norm = p.replace(/\\/g, '/');
   return '/img/' + norm.split('/').filter(Boolean).map(encodeURIComponent).join('/');
 }
+function thumbUrl(p) {
+  // 缩略图 URL：图片/视频/文档统一走 /api/thumb（服务端降采样 + 缓存）
+  return '/api/thumb?path=' + encodeURIComponent(p) + '&size=256';
+}
 function encPath(p) { return p.replace(/\\/g, '/').split('/').filter(Boolean).map(encodeURIComponent).join('/'); }
 
 // ---- 导航 ----
@@ -88,6 +92,7 @@ function _sameView(a, b) {
 function _applyView(v) {
   currentPath = v.path || '';
   currentTagIds = (v.tagIds || []).slice();
+  browseOffset = 0; browseType = 'all';
   refresh();
   if (typeof updateTagActive === 'function') updateTagActive();
   if (typeof expandToPath === 'function' && currentPath) expandToPath(currentPath);
@@ -230,11 +235,20 @@ function renderSortMenuActive() {
 function setSortField(f) {
   if (f && f !== sortKey) sortKey = f;
   renderSortMenuActive();
+  // 平铺模式：排序作用于平铺结果并重载，不走普通浏览 render()
+  if (typeof flattenMode !== 'undefined' && flattenMode) {
+    if (typeof flattenSetSort === 'function') flattenSetSort();
+    return;
+  }
   render();
 }
 function setSortDir(d) {
   sortDir = d;
   renderSortMenuActive();
+  if (typeof flattenMode !== 'undefined' && flattenMode) {
+    if (typeof flattenSetSort === 'function') flattenSetSort();
+    return;
+  }
   render();
 }
 document.addEventListener('mousedown', e => {
@@ -339,34 +353,36 @@ async function refresh() {
   const lim = pageLimit();
   params.set('limit', lim);
   if (browseOffset > 0) params.set('offset', browseOffset);
+  if (browseType && browseType !== 'all') params.set('type', browseType);
   const r = await fetch('/api/images?' + params.toString());
   data = await r.json();
   if (!data.ok) { itemGrid.innerHTML = `<p class="muted">加载失败: ${data.error || ''}</p>`; return; }
   renderAddress();
   render();
   if (typeof expandToPath === 'function') expandToPath(currentPath);
-  // 大目录自动分页（目录浏览且 total > limit 时显示分页条；筛选不过分页）
-  if (!currentTagIds.length && data.total > lim) {
+  // 大目录自动分页（目录浏览或标签筛选，total > limit 时显示导航+分页套件）
+  if (data.total > lim) {
     browseRegister(lim, data.total);
   } else {
     browseUnregister();
   }
 }
 
-// ---- 普通浏览分页（大目录自动进入分页，全局） ----
+// ---- 普通浏览分页（大目录自动进入分页，全局；含类型过滤） ----
 let browseOffset = 0;
+let browseType = 'all';
 function browseRegister(limit, total) {
   pgRegister('browse', {
-    get: () => ({total, offset: browseOffset, limit}),
+    get: () => ({total, offset: browseOffset, limit, type: browseType}),
     prev: () => browseGo(browseOffset - limit),
     next: () => browseGo(browseOffset + limit),
     jump: (off) => browseGo(off),
-    size: (newLimit) => { browseOffset = 0; refresh(); },
+    size: () => { browseOffset = 0; refresh(); },
   });
   renderBrowsePager();
 }
 function browseUnregister() {
-  browseOffset = 0;
+  browseOffset = 0; browseType = 'all';
   if (typeof pgRemove === 'function') pgRemove('browse');
 }
 function browseGo(offset) {
@@ -376,23 +392,18 @@ function browseGo(offset) {
   const body = document.getElementById('explorer-body');
   if (body) body.scrollTop = 0;
 }
+function browseSetType(t) {
+  browseType = t;
+  browseOffset = 0;
+  refresh();
+}
 function renderBrowsePager() {
-  const body = document.getElementById('explorer-body');
-  let top = document.getElementById('pg-top-browse');
-  if (!top) {
-    top = document.createElement('div');
-    top.id = 'pg-top-browse';
-    top.className = 'flatten-pager pg-sticky';
-    body.insertBefore(top, body.firstChild);
-  }
-  let bottom = document.getElementById('pg-bottom-browse');
-  if (!bottom) {
-    bottom = document.createElement('div');
-    bottom.id = 'pg-bottom-browse';
-    bottom.className = 'flatten-pager';
-    body.appendChild(bottom);
-  }
-  renderPager('browse');
+  pgRenderBanner('browse', {
+    title: '📂 ' + (currentPath ? currentPath.split('/').filter(Boolean).pop() : '此电脑'),
+    types: [['all', '全部'], ['image', '图片'], ['video', '视频'], ['document', '文档']],
+    onType: 'browseSetType',
+  });
+  pgRenderBottom('browse');
 }
 
 let _allItems = [];
@@ -430,14 +441,6 @@ function render() {
   _allItems = items;
   _renderedCount = 0;
   renderMore();
-  if (data.truncated) {
-    const tip = document.createElement('div');
-    tip.className = 'muted';
-    tip.style.textAlign = 'center';
-    tip.style.padding = '12px';
-    tip.textContent = '目录较大，仅显示前 500 项。建议用右上角 🪟 在系统资源管理器中浏览。';
-    itemGrid.appendChild(tip);
-  }
   setupInfiniteScroll();
 }
 
@@ -483,28 +486,27 @@ function appendGridView(chunk, startIdx) {
     let display = '';
     if (it.isFolder) {
       display = it.preview && it.preview.length
-        ? `<div class="folder-preview ${it.preview.length === 1 ? 'single' : ''}"><div class="fp-grid">${it.preview.slice(0,4).map(p=>`<img src="${relUrl(p)}" loading="lazy">`).join('')}</div></div>`
+        ? `<div class="folder-preview ${it.preview.length === 1 ? 'single' : ''}"><div class="fp-grid">${it.preview.slice(0,4).map(p=>`<img src="${thumbUrl(p)}" loading="lazy">`).join('')}</div></div>`
         : `<div class="cell-icon">📁</div>`;
     } else if (it.type === 'image') {
-      display = `<img class="cell-thumb" src="${relUrl(it.path)}" loading="lazy">`;
+      // 图片：走缩略图降采样，避免网格加载原图（大图/数千像素卡顿根源）
+      display = `<img class="cell-thumb" src="${thumbUrl(it.path)}" loading="lazy">`;
     } else if (it.type === 'video') {
       // 视频：尝试系统缩略图，失败回退图标
-      display = `<img class="cell-thumb video-thumb" src="/api/thumb?path=${encodeURIComponent(it.path)}&size=256" loading="lazy">`;
+      display = `<img class="cell-thumb video-thumb" src="${thumbUrl(it.path)}" loading="lazy">`;
     } else if (it.type === 'doc' || it.type === 'pdf' || it.type === 'archive' || it.type === 'code') {
       // 文档/PDF/压缩包/代码：尝试系统 COM 缩略图（PSD/Office/PDF 有效），失败回退图标
-      display = `<img class="cell-thumb doc-thumb" src="/api/thumb?path=${encodeURIComponent(it.path)}&size=256" loading="lazy">`;
+      display = `<img class="cell-thumb doc-thumb" src="${thumbUrl(it.path)}" loading="lazy">`;
     } else {
       display = fileIconHtml(it.name, 'cell-icon-img', 'cell-icon', iconOf(it.type), it.path);
     }
     const meta = it.isFolder ? `${it.file_count} 项` : fmtSize(it.size);
     div.innerHTML = `<div class="cell-content">${display}</div><div class="cell-name">${nameHtml(it)}</div><div class="cell-meta">${meta}</div>`;
-    // 非图片缩略图加载失败 → 回退图标
-    if (it.type !== 'image') {
-      const vt = div.querySelector('.video-thumb, .doc-thumb');
-      if (vt) vt.onerror = () => {
-        vt.outerHTML = fileIconHtml(it.name, 'cell-icon-img', 'cell-icon', iconOf(it.type), it.path);
-      };
-    }
+    // 缩略图加载失败 → 回退图标
+    const vt = div.querySelector('.cell-thumb');
+    if (vt) vt.onerror = () => {
+      vt.outerHTML = fileIconHtml(it.name, 'cell-icon-img', 'cell-icon', iconOf(it.type), it.path);
+    };
     div.dataset.key = it.path;
     div.onclick = e => onItemClick(e, idx, it.path, it.isFolder);
     div.ondblclick = e => { e.stopPropagation(); onItemDblClick(it.path, it.isFolder); };
@@ -563,6 +565,40 @@ function fmtSize(n) {
 let _marquee = null;
 let _marqueeStart = null;
 let _marqueeEl = null;
+// 框选自动滚动：鼠标压住容器上下边缘时持续滚动
+// 框选全部用内容坐标（client + scrollTop），滚动不影响坐标基准，无需在滚动循环里调整
+let _marqueeScrollRAF = null;
+let _marqueeScrollSpeed = 0;
+function _marqueeScrollStop() {
+  if (_marqueeScrollRAF) { cancelAnimationFrame(_marqueeScrollRAF); _marqueeScrollRAF = null; }
+  _marqueeScrollSpeed = 0;
+}
+function _marqueeScrollLoop() {
+  _marqueeScrollRAF = requestAnimationFrame(() => {
+    if (!_marquee || !_marqueeScrollSpeed) { _marqueeScrollRAF = null; return; }
+    const bodyEl = document.getElementById('explorer-body');
+    if (bodyEl) bodyEl.scrollTop += _marqueeScrollSpeed;
+    updateMarquee();
+    _marqueeScrollLoop();
+  });
+}
+function _marqueeUpdateScroll(clientY, bodyEl) {
+  if (!bodyEl || !_marquee) return;
+  const r = bodyEl.getBoundingClientRect();
+  const edge = 32;
+  if (clientY < r.top + edge) {
+    // 向上滚动（速度随深度）
+    const d = (r.top + edge - clientY) / edge;
+    _marqueeScrollSpeed = -Math.round(8 + d * 26);
+    if (!_marqueeScrollRAF) _marqueeScrollLoop();
+  } else if (clientY > r.bottom - edge) {
+    const d = (clientY - (r.bottom - edge)) / edge;
+    _marqueeScrollSpeed = Math.round(8 + d * 26);
+    if (!_marqueeScrollRAF) _marqueeScrollLoop();
+  } else {
+    _marqueeScrollStop();
+  }
+}
 function initMarquee() {
   const bodyEl = document.getElementById('explorer-body');
   _marqueeEl = document.createElement('div');
@@ -572,19 +608,22 @@ function initMarquee() {
   bodyEl.addEventListener('mousedown', e => {
     if (e.button !== 0) return;
     if (e.target.closest('.cell') || e.target.closest('tr') || e.target.closest('.scroll-sentinel')) return;
-    _marqueeStart = {x: e.clientX, y: e.clientY};
-    _marquee = {x: e.clientX, y: e.clientY, w: 0, h: 0};
+    // 内容坐标：client + scrollTop，滚动不影响基准
+    _marqueeStart = {x: e.clientX, y: e.clientY + bodyEl.scrollTop};
+    _marquee = {x: e.clientX, y: e.clientY + bodyEl.scrollTop, w: 0, h: 0};
     _marqueeEl.style.display = 'block';
     updateMarquee();
   });
   document.addEventListener('mousemove', e => {
     if (!_marquee || !_marqueeStart) return;
+    const cy = e.clientY + bodyEl.scrollTop;
     _marquee = {
       x: Math.min(e.clientX, _marqueeStart.x),
-      y: Math.min(e.clientY, _marqueeStart.y),
+      y: Math.min(cy, _marqueeStart.y),
       w: Math.abs(e.clientX - _marqueeStart.x),
-      h: Math.abs(e.clientY - _marqueeStart.y),
+      h: Math.abs(cy - _marqueeStart.y),
     };
+    _marqueeUpdateScroll(e.clientY, bodyEl);
     updateMarquee();
   });
   document.addEventListener('mouseup', () => {
@@ -592,6 +631,7 @@ function initMarquee() {
     const wasClick = _marquee.w < 4 && _marquee.h < 4;
     _marqueeEl.style.display = 'none';
     _marquee = null; _marqueeStart = null;
+    _marqueeScrollStop();
     if (wasClick) {
       // 点击空白：取消所有选择
       selected.clear();
@@ -599,27 +639,41 @@ function initMarquee() {
     }
   });
 }
+let _marqueeRAF = null;
 function updateMarquee() {
-  _marqueeEl.style.display = 'block';
-  _marqueeEl.style.left = _marquee.x + 'px';
-  _marqueeEl.style.top = _marquee.y + 'px';
-  _marqueeEl.style.width = _marquee.w + 'px';
-  _marqueeEl.style.height = _marquee.h + 'px';
-  if (_marquee.w < 4 && _marquee.h < 4) return; // 太小当作点击
-  // 计算与哪些 cell 相交
-  selected.clear();
-  const rect = {x: _marquee.x, y: _marquee.y, w: _marquee.w, h: _marquee.h};
-  document.querySelectorAll('.cell, .list-view tr').forEach(el => {
-    const r = el.getBoundingClientRect();
-    const overlap = !(r.right < rect.x || r.left > rect.x + rect.w || r.bottom < rect.y || r.top > rect.y + rect.h);
-    if (overlap && el.dataset.key) selected.add(el.dataset.key);
-    el.classList.toggle('sel', selected.has(el.dataset.key));
+  if (_marqueeRAF) return; // 已排队的 rAF 帧，合并本次更新
+  _marqueeRAF = requestAnimationFrame(() => {
+    _marqueeRAF = null;
+    const bodyEl = document.getElementById('explorer-body');
+    const st = bodyEl ? bodyEl.scrollTop : 0;
+    _marqueeEl.style.display = 'block';
+    _marqueeEl.style.left = _marquee.x + 'px';
+    _marqueeEl.style.top = (_marquee.y - st) + 'px';   // 内容坐标 → 视口坐标显示
+    _marqueeEl.style.width = _marquee.w + 'px';
+    _marqueeEl.style.height = _marquee.h + 'px';
+    if (_marquee.w < 4 && _marquee.h < 4) return; // 太小当作点击
+    // 计算与哪些 cell 相交：marquee 是内容坐标，cell rect 转内容坐标统一基准
+    selected.clear();
+    const rect = {x: _marquee.x, y: _marquee.y, w: _marquee.w, h: _marquee.h};
+    const els = document.querySelectorAll('.cell, .list-view tr');
+    for (let i = 0; i < els.length; i++) {
+      const el = els[i];
+      const r = el.getBoundingClientRect();
+      const ry = r.top + st, rb = r.bottom + st;
+      const overlap = !(r.right < rect.x || r.left > rect.x + rect.w || rb < rect.y || ry > rect.y + rect.h);
+      if (overlap && el.dataset.key) selected.add(el.dataset.key);
+    }
+    // 批量写 class，避免逐元素读写交错布局
+    for (let i = 0; i < els.length; i++) {
+      const el = els[i];
+      el.classList.toggle('sel', el.dataset.key && selected.has(el.dataset.key));
+    }
+    // 异常模式下同步底部操作栏的"已选 N 项"
+    if (typeof taskViewMode !== 'undefined' && taskViewMode === 'orphan' &&
+        typeof renderOrphanActionBar === 'function') {
+      renderOrphanActionBar();
+    }
   });
-  // 异常模式下同步底部操作栏的"已选 N 项"
-  if (typeof taskViewMode !== 'undefined' && taskViewMode === 'orphan' &&
-      typeof renderOrphanActionBar === 'function') {
-    renderOrphanActionBar();
-  }
 }
 initMarquee();
 
@@ -1030,7 +1084,7 @@ async function openMultiAttrModal(paths) {
       ]);
       const a = await attrRes.json();
       const t = (await tagRes.json()).tags || [];
-      return {name: p.split(/[\\/]/).pop() || p, ok: a.ok, abs_path: a.abs_path, tags: t};
+      return {name: p.split(/[\\/]/).pop() || p, ok: a.ok, abs_path: a.abs_path, tags: t, size: a.size || 0};
     }));
     items.push(...results);
   } catch (e) {
@@ -1048,22 +1102,20 @@ async function openMultiAttrModal(paths) {
       common.forEach((_, id) => { if (!ids.has(id)) common.delete(id); });
     }
   });
+  // 并集/交集：从所有文件的标签池按 id 聚合（不能用 items[0] 过滤，会漏掉其他项独有标签）
+  const tagById = new Map();
+  items.forEach(it => it.tags.forEach(t => { if (!tagById.has(t.id)) tagById.set(t.id, t); }));
   const commonTags = items.length ? items[0].tags.filter(t => common.has(t.id)) : [];
-  const unionTags = items.length ? items[0].tags.filter(t => allTagIds.has(t.id)) : [];
+  const unionTags = items.length ? Array.from(tagById.values()).filter(t => allTagIds.has(t.id)) : [];
   // 摘要胶囊（不带颜色，纯文本；并集去重按 id）
   const unionCaps = unionTags.map(t => `<span class="tag-capsule plain">${t.name}</span>`).join('') || '<span class="muted">（无）</span>';
   const commonCaps = commonTags.map(t => `<span class="tag-capsule plain">${t.name}</span>`).join('') || '<span class="muted">（无共同标签）</span>';
-  const rows = items.map(it => {
-    const terminalTags = it.tags.filter(t => !it.tags.some(o => o.parent_id === t.id));
-    const tagText = terminalTags.map(t => t.name).join('、') || '（无标签）';
-    return `<div class="attr-row"><span>${it.name}</span><span class="attr-tags">${tagText}</span></div>`;
-  }).join('');
+  // 文件总计大小（文件夹 size=0，不参与合计）
+  const totalSize = items.reduce((s, it) => s + (it.size || 0), 0);
   bodyEl.innerHTML = `
-    <div class="attr-row"><span>选中条目</span><span>${items.length} 项</span></div>
+    <div class="attr-row"><span>选中条目</span><span>${items.length} 项${totalSize > 0 ? ' · 共 ' + fmtSize(totalSize) : ''}</span></div>
     <div class="attr-row"><span>共同标签</span><span class="attr-tags">${commonCaps}</span></div>
-    <div class="attr-row"><span>全部标签</span><span class="attr-tags">${unionCaps}</span></div>
-    <hr class="attr-divider">
-    ${rows}`;
+    <div class="attr-row"><span>全部标签</span><span class="attr-tags">${unionCaps}</span></div>`;
 }
 
 // 初始化显示模式按钮文案（页面加载后执行）

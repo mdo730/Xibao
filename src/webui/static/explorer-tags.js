@@ -13,10 +13,12 @@ async function openTagModal(paths, kind, mode, warnTagIds) {
   try {
     let tags, curIds;
     if (tagModalMode === 'add') {
-      // 追加：初始全空（勾选 = 要新增的标签），不展示现有标签避免误导
+      // 追加：勾选 = 要新增的标签。展示首个文件的现有标签（只读参考），保存时逐文件 ∪ 合并
       const tagsRes = await fetch('/api/tags');
       tags = (await tagsRes.json()).tags || [];
-      curIds = new Set();
+      const curRes = await fetch('/api/folders/' + encPath(tagModalPaths[0]) + '/tags');
+      const cur = (await curRes.json()).tags || [];
+      curIds = new Set(cur.map(t => t.id));
     } else {
       const [tagsRes, curRes] = await Promise.all([
         fetch('/api/tags'),
@@ -62,17 +64,24 @@ async function saveTagModal() {
   }
   if (!paths || !paths.length) return;
   try {
-    for (const p of paths) {
-      let finalIds = ids;
-      if (mode === 'add') {
-        // 追加：现有标签 ∪ 勾选，绝不覆盖（原标签不动）
-        const curRes = await fetch('/api/folders/' + encPath(p) + '/tags');
-        const cur = (await curRes.json()).tags || [];
-        const curIds = new Set(cur.map(t => t.id));
-        for (const tid of ids) curIds.add(tid);
-        finalIds = Array.from(curIds);
+    if (mode === 'add' && paths.length > 1) {
+      // 批量追加：一次请求完成全部路径的 ∪ 合并（多选不逐文件 GET+POST）
+      const r = await fetch('/api/tags/append', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({paths, tag_ids: ids})});
+      const d = await r.json();
+      if (!d.ok) { alert('追加失败: ' + (d.error || '')); }
+    } else {
+      for (const p of paths) {
+        let finalIds = ids;
+        if (mode === 'add') {
+          // 追加：现有标签 ∪ 勾选，绝不覆盖（原标签不动）
+          const curRes = await fetch('/api/folders/' + encPath(p) + '/tags');
+          const cur = (await curRes.json()).tags || [];
+          const curIds = new Set(cur.map(t => t.id));
+          for (const tid of ids) curIds.add(tid);
+          finalIds = Array.from(curIds);
+        }
+        await fetch('/api/folders/' + encPath(p) + '/tags', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({tag_ids: finalIds})});
       }
-      await fetch('/api/folders/' + encPath(p) + '/tags', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({tag_ids: finalIds})});
     }
   } catch (e) { alert('保存失败: ' + e.message); }
   loadTags(); refresh();

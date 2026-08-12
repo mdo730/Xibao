@@ -157,14 +157,22 @@ def ensure_index():
     return False
 
 
-def search(q, limit=500):
-    """按文件名模糊搜索。返回 (folders, files)。"""
+def search(q, limit=500, root=None):
+    """按文件名模糊搜索。返回 (folders, files)。root 非空时仅搜该目录（含子目录）。"""
     from ..images import library as lib
     c = _conn()
     like = f"%{q}%"
-    rows = c.execute(
-        "SELECT path, name, type FROM files WHERE name LIKE ? ORDER BY name LIMIT ?",
-        (like, limit)).fetchall()
+    if root:
+        r = root.replace("/", "\\")
+        prefix = r + "\\" if not r.endswith("\\") else r
+        rows = c.execute(
+            "SELECT path, name, type FROM files WHERE name LIKE ? AND (path = ? OR path LIKE ?) "
+            "ORDER BY name LIMIT ?",
+            (like, r, prefix + "%", limit)).fetchall()
+    else:
+        rows = c.execute(
+            "SELECT path, name, type FROM files WHERE name LIKE ? ORDER BY name LIMIT ?",
+            (like, limit)).fetchall()
     c.close()
     folders, files = [], []
     for path, name, ftype in rows:

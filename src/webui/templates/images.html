@@ -432,7 +432,14 @@
     <details open>
       <summary>v0.6.1</summary>
       <p>· 新增：复制标签树——右键文件夹「📋 复制标签树」，把磁盘目录结构一键转成标签树（可选挂载到现有标签下、自动给文件打标签）</p>
-      <p>· 新增：平铺文件夹——右键文件夹「🔍 平铺文件夹」，递归显示该目录下所有文件（类型过滤/分页）</p>
+      <p>· 新增：平铺文件夹——右键文件夹「🔍 平铺文件夹」，递归显示该目录下所有文件（类型过滤/分页/排序/退出）</p>
+      <p>· 新增：分页导航——平铺/普通浏览/标签筛选/异常区统一分页条（类型过滤按钮 + 页码跳转 + 每页数量记忆）</p>
+      <p>· 新增：搜索限定当前目录——在某个目录内搜索只搜该目录（含子目录），不再每次都全局搜索</p>
+      <p>· 优化：多选追加标签提速——批量打标一次请求完成，多选几十个文件不再卡顿</p>
+      <p>· 优化：图片缩略图——网格/平铺/待审核视图图片走降采样缩略图，大图目录流畅加载</p>
+      <p>· 优化：框选自动滚动——拖动框选到窗口边缘时自动向下/上滚动</p>
+      <p>· 优化：多选属性精简为摘要（选中条目数/总大小/共同标签/全部标签）</p>
+      <p>· 优化：整体性能——数据库收缩、请求不再重复全量快照、目录浏览/平铺加速</p>
     </details>
     <details>
       <summary>v0.6.0</summary>
@@ -519,17 +526,17 @@
 <script src="{{ url_for('static', filename='vendor/jstree.min.js') }}?v=1"></script>
 <script src="{{ url_for('static', filename='vendor/Sortable.min.js') }}?v=1"></script>
   <script src="{{ url_for('static', filename='file-icons.js') }}?v=1"></script>
-  <script src="{{ url_for('static', filename='pagination.js') }}?v=1"></script>
-  <script src="{{ url_for('static', filename='explorer-core.js') }}?v=6"></script>
-<script src="{{ url_for('static', filename='explorer-tree.js') }}?v=5"></script>
-<script src="{{ url_for('static', filename='explorer-tags.js') }}?v=6"></script>
+  <script src="{{ url_for('static', filename='pagination.js') }}?v=2"></script>
+  <script src="{{ url_for('static', filename='explorer-core.js') }}?v=7"></script>
+<script src="{{ url_for('static', filename='explorer-tree.js') }}?v=6"></script>
+<script src="{{ url_for('static', filename='explorer-tags.js') }}?v=7"></script>
 <script src="{{ url_for('static', filename='explorer-quicklook.js') }}?v=1"></script>
 <script src="{{ url_for('static', filename='explorer-keys.js') }}?v=2"></script>
-<script src="{{ url_for('static', filename='explorer-ui.js') }}?v=5"></script>
-  <script src="{{ url_for('static', filename='explorer-tags-jstree.js') }}?v=3"></script>
-  <script src="{{ url_for('static', filename='explorer-flatten.js') }}?v=1"></script>
+<script src="{{ url_for('static', filename='explorer-ui.js') }}?v=6"></script>
+  <script src="{{ url_for('static', filename='explorer-tags-jstree.js') }}?v=4"></script>
+  <script src="{{ url_for('static', filename='explorer-flatten.js') }}?v=2"></script>
 <script src="{{ url_for('static', filename='explorer-schemes.js') }}?v=1"></script>
-<script src="{{ url_for('static', filename='review.js') }}?v=1"></script>
+<script src="{{ url_for('static', filename='review.js') }}?v=2"></script>
 <script src="{{ url_for('static', filename='settings.js') }}?v=2"></script>
 {% endblock %}
 

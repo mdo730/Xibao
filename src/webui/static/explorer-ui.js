@@ -18,7 +18,11 @@ async function doSearch() {
   // 检索中视觉反馈
   itemGrid.innerHTML = '<div class="search-loading">🔍 检索中…</div>';
   const t0 = Date.now();
-  const r = await fetch('/api/search?q=' + encodeURIComponent(q));
+  // 限定当前目录：仅搜当前目录（含子目录）内的文件，不做全局搜索
+  const scopeDir = (typeof currentPath === 'string' && currentPath) ? currentPath : '';
+  const url = '/api/search?q=' + encodeURIComponent(q) +
+    (scopeDir ? '&dir=' + encodeURIComponent(scopeDir) : '');
+  const r = await fetch(url);
   const d = await r.json();
   // 保证加载提示至少显示 250ms，避免一闪而过
   const elapsed = Date.now() - t0;
@@ -55,10 +59,12 @@ async function loadSearchStatus() {
 }
 
 loadTags();
-refresh();
 loadFileTree();
 initSearch();
 loadSearchStatus();
-ensureIconMap().then(() => refresh()).catch(() => {});
+// 首次渲染等图标表就绪后执行，避免启动时两次全量 fetch+渲染
+ensureIconMap()
+  .then(() => refresh())
+  .catch(() => refresh());
 loadGridSize();
 if (typeof initGridSeg === 'function') initGridSeg();

@@ -57,50 +57,57 @@ def flatten_dir(root, type_filter="all", max_depth=None, offset=0, limit=100,
         "archive": _ARCHIVE_EXTS,
     }
 
-    def _onerror(e):
-        pass  # 权限不足跳过
-
-    for dirpath, dirnames, filenames in os.walk(root, onerror=_onerror):
+    def _walk(dirpath, folder_rel, depth):
+        """scandir 递归收集文件（一次拿类型，避免 os.walk 的二次 stat）。"""
+        try:
+            entries = list(os.scandir(dirpath))
+        except OSError:
+            return
         try:
             st = os.stat(dirpath)
             key = (st.st_dev, st.st_ino)
         except OSError:
             key = None
-        if key and key in seen:
-            dirnames[:] = []
-            continue
         if key:
+            if key in seen:
+                return
             seen.add(key)
-        rel = os.path.relpath(dirpath, root)
-        depth = 0 if rel == "." else rel.count(os.sep) + 1
-        if max_depth is not None and depth > max_depth:
-            dirnames[:] = []
-            continue
-        dirnames[:] = [d for d in dirnames if d not in _skip]
-        folder_rel = "" if rel == "." else rel.replace("\\", "/")
-        for fn in filenames:
-            if fn in _skip:
+        for e in entries:
+            name = e.name
+            if name in _skip:
                 continue
-            full = os.path.join(dirpath, fn)
-            ft = file_type(fn)
+            try:
+                is_dir = e.is_dir(follow_symlinks=False)
+            except OSError:
+                is_dir = False
+            full = e.path
+            if is_dir:
+                if max_depth is not None and depth + 1 > max_depth:
+                    continue
+                sub_rel = (folder_rel + "/" + name) if folder_rel else name
+                _walk(full, sub_rel, depth + 1)
+                continue
+            ft = file_type(name)
             if type_filter != "all":
-                ext = os.path.splitext(fn)[1].lower()
+                ext = os.path.splitext(name)[1].lower()
                 if ext not in type_exts.get(type_filter, ()):
                     continue
             try:
-                fs = os.stat(full)
+                fs = e.stat()
             except OSError:
                 continue
             items.append({
-                "name": fn,
+                "name": name,
                 "path": full.replace("\\", "/"),
-                "rel_path": (folder_rel + "/" + fn) if folder_rel else fn,
+                "rel_path": (folder_rel + "/" + name) if folder_rel else name,
                 "folder_rel_path": folder_rel,
                 "size": fs.st_size,
                 "mtime": fs.st_mtime,
                 "type": ft,
-                "ext": os.path.splitext(fn)[1].lower(),
+                "ext": os.path.splitext(name)[1].lower(),
             })
+
+    _walk(root, "", 0)
 
     # 排序
     if sort_key == "mtime":
@@ -135,10 +142,11 @@ def _safe_path(path):
     return p
 
 
-def list_dir(path, limit=0, offset=0):
+def list_dir(path, limit=0, offset=0, type_filter="all"):
     """列出某目录下的文件夹与文件（全类型）。path 为空表示"此电脑"。
 
     limit > 0 时只列 offset 起 limit 条（分页），文件夹保送在前；文件夹不生成预览。
+    type_filter: all/image/video/document/code/archive/audio（只留对应类型文件，文件夹始终显示）
     返回 {"folders": [...], "files": [...], "dir": target, "truncated": bool, "total": int}
     """
     if not path:
@@ -147,28 +155,41 @@ def list_dir(path, limit=0, offset=0):
     if not os.path.isdir(target):
         return {"folders": [], "files": [], "dir": target, "total": 0, "truncated": False}
     try:
-        entries = sorted(os.listdir(target))
+        with os.scandir(target) as it:
+            all_entries = list(it)
     except OSError as e:
         log.warning("读取目录失败 %s: %s", target, e)
         return {"folders": [], "files": [], "dir": target, "total": 0, "truncated": False}
-    total = len(entries)
-    truncated = limit > 0 and total > limit
+    # scandir 一次拿类型（免逐条 os.path.isdir 二次系统调用）
+    names = sorted((e.name for e in all_entries))
     is_dir = {}
-    for name in entries:
+    for e in all_entries:
         try:
-            is_dir[name] = os.path.isdir(os.path.join(target, name))
+            is_dir[e.name] = e.is_dir(follow_symlinks=False)
         except OSError:
-            is_dir[name] = False
+            is_dir[e.name] = False
+    # 类型过滤（文件夹始终保留）
+    if type_filter and type_filter != "all":
+        type_exts = {
+            "image": _IMG_EXTS, "video": _VIDEO_EXTS, "audio": _AUDIO_EXTS,
+            "document": _DOC_EXTS + (".pdf",), "code": _CODE_EXTS,
+            "archive": _ARCHIVE_EXTS,
+        }
+        keep = type_exts.get(type_filter, ())
+        names = [n for n in names if is_dir.get(n) or
+                 os.path.splitext(n)[1].lower() in keep]
+    total = len(names)
+    truncated = limit > 0 and total > limit
     if limit > 0:
         # 分页：先分离文件夹保送在前，再按 offset/limit 切片
-        folders_first = [n for n in entries if is_dir.get(n)]
-        files_only = [n for n in entries if not is_dir.get(n)]
+        folders_first = [n for n in names if is_dir.get(n)]
+        files_only = [n for n in names if not is_dir.get(n)]
         ordered = folders_first + files_only
         page = ordered[offset:offset + limit]
-        entries = page
+        names = page
         truncated = offset + limit < total
     folders, files = [], []
-    for name in entries:
+    for name in names:
         p = os.path.join(target, name)
         try:
             if is_dir.get(name, False):

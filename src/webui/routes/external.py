@@ -221,14 +221,3 @@ def api_review():
         return jsonify({"ok": True, **store.review_pending(ids, accept)})
     finally:
         store.close()
-
-
-@external_bp.post("/api/v1/tags/pending/clear")
-def api_pending_clear():
-    """清空已审核历史。"""
-    store = Store()
-    try:
-        store.clear_reviewed()
-        return jsonify({"ok": True})
-    finally:
-        store.close()

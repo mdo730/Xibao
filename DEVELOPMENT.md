@@ -5,7 +5,7 @@
 
 ## 当前状态
 
-- **当前版本：v0.6.0（开发中，重构进行中）**
+- **当前版本：v0.6.1**
 - 项目根目录：仓库根（下文以 `<root>` 表示）
 - 虚拟环境：`<root>\.venv\Scripts\python.exe`
 - 源码运行：`start.bat` 或 `.venv\Scripts\python.exe -m src.webui.app --port 8788`
@@ -20,13 +20,17 @@
 
 Python 3.13 + Flask + 原生 JS + jsTree + jQuery + SortableJS。
 本地资源管理器（非采集工具）。PyInstaller onedir + Inno Setup 打包。
-pystray（托盘）+ psutil + Pillow + av（PyAV，视频缩略图解码）。测试：pytest（107 个用例）。
+pystray（托盘）+ psutil + Pillow + av（PyAV，视频缩略图解码）。测试：pytest（118 个用例）。
 
 ## 核心功能
 
 - **资源管理器**：真实文件树（惰性加载）、网格/列表视图、排序（文件夹恒在前）、面包屑、网格缩放、快速访问收藏、目录树宽度可拖拽/缩进封顶
 - **导航源**：文件树顶部接入系统 Known Folders（桌面/下载/图片/视频/文档/音乐等，纯 ctypes SHGetKnownFolderPath，自动处理 OneDrive 重定向），设置可开关/勾选；快速访问并入文件树（系统文件夹下方+分隔线隔开磁盘）
-- **搜索**：Everything（可选）→ 本地索引分层兜底；搜索同时匹配文件名与备注名
+- **搜索**：Everything（可选）→ 本地索引分层兜底；搜索同时匹配文件名与备注名；**支持限定当前目录搜索**（`dir` 参数，避免每次都全局搜索）
+- **平铺文件夹（v0.6.1）**：右键文件夹「🔍 平铺文件夹」→ 递归显示该目录下所有文件；独立平铺模式（类型过滤/分页/排序/退出）；`GET /api/folders/<path>/flatten`
+- **复制标签树（v0.6.1）**：右键文件夹「📋 复制标签树」→ 目录层级 1:1 转标签树（可选自动打标）；`POST /api/tags/from-folder`
+- **通用导航+分页套件（v0.6.1）**：`pagination.js`——平铺/普通浏览/标签筛选/异常区四场景统一（顶部 banner 含类型过滤+分页控件，底部同步分页条，每页数量记忆 localStorage）
+- **多选批量追加标签（v0.6.1 优化）**：`POST /api/tags/append` 单事务批量 union 追加，多选打标不再逐文件请求
 - **标签体系**：无限级标签树 + 颜色、单击筛选、🔖 多选筛选（and/else）、筛选方案、标签备份导出/导入（含颜色）、多选追加标签、**拖动排序持久化**（sort_order + move_tag）、**稳定文件标识**（文件移动/重命名后标签自动跟随）、标签异常（父级标签无法在弹窗管理）检测与清理
 - **备注名（Alias）**：文件/文件夹可设"仅西煲内显示"名称，不改真实文件名；Q 键切换文件名/备注名显示模式；显示时带底色（设置可调）；随标签备份导出/导入
 - **缩略图**：系统 COM 缩略图优先（PSD/PDF/Office 等也出图）+ PyAV 视频帧回退；系统文件图标（exe 等按完整路径缓存）；网格视图懒加载 + 失败回退图标
@@ -48,15 +52,16 @@ pystray（托盘）+ psutil + Pillow + av（PyAV，视频缩略图解码）。�
   - 注意：routes 内相对导入是三级 `from ...memory` / `from ...images`（routes 在 webui 下）
 - `src/memory/store.py`：SQLite + meta KV + 标签树 + path_aliases（备注名）+ **schema 迁移机制**（`_MIGRATIONS` + 备份 + 回滚，当前 SCHEMA_VERSION=12）+ `tag_counts()`（递归 CTE 含子孙计数）+ move_tag + file_id 关联（`_record_file_id`/`resolve_path`）+ 审核队列
 - `src/images/file_id.py`：稳定文件标识（st_ino+st_dev 编码、OpenFileById 反查路径、按卷判文件系统信任级）
-- `src/images/thumbnail.py`：多后端缩略图（系统 COM 优先 + PyAV 视频帧回退，缓存 `%LOCALAPPDATA%\Xibao\thumbnails` + 后台生成队列）
-- `src/images/shell_thumbnail.py`：系统 COM 缩略图/图标（纯 ctypes 参考 yasb，`SIIGBF_ICONONLY` 取 exe 图标按完整路径缓存）
+- `src/images/thumbnail.py`：多后端缩略图（系统 COM 优先 + PyAV 视频帧回退 + **图片 PIL 降采样**，缓存 `%LOCALAPPDATA%\Xibao\thumbnails` + 后台生成队列；`get_video_thumb` 支持 `sync` 参数：API 层异步排队不阻塞）
+- `src/images/shell_thumbnail.py`：系统 COM 缩略图/图标（纯 ctypes 参考 yasb，**常驻 STA 线程池**复用，避免每次新建线程+COM 初始化）
 - `src/images/known_folders.py`：系统 Known Folders（纯 ctypes 调 SHGetKnownFolderPath，自动处理 OneDrive 重定向）
 - `src/images/tools.py`：外部工具探测（7-Zip/WinRAR/Bandizip/Locale Emulator/Everything，纯 winreg）
-- `src/images/library.py`：文件操作（rename/move/delete 均处理标签关联，迁移开关控制）
+- `src/images/library.py`：文件操作（rename/move/delete 均处理标签关联，迁移开关控制）+ `list_dir`（scandir 一次拿类型）/`flatten_dir`（scandir 递归，junction 去重）
 - `src/webui/static/explorer-tags.js`：打标签弹窗（单选编辑=覆盖、多选追加=并集）
-- `src/webui/static/explorer-tags-jstree.js`：标签树 jsTree 交互（筛选链去冗余、chips 颜色/位置/尺寸、标签数量显示、拖动排序 + 孤儿预警 + 祖先链刷新）
-- `src/webui/static/explorer-core.js`：右键菜单、属性、导航历史（navTo/navBack/navUp 统一正斜杠）、备注名显示工具（nameHtml/displayName/aliasMode）、currentCtx（优先选中项）
-- `src/webui/static/explorer-tree.js`：文件树 + 宽度拖拽（localStorage）+ 缩进封顶 + Known Folders 渲染
+- `src/webui/static/explorer-tags-jstree.js`：标签树 jsTree 交互（筛选链去冗余、chips 颜色/位置/尺寸、标签数量显示、拖动排序 + 孤儿预警 + 祖先链刷新、**计数增量更新**不整树重建）
+- `src/webui/static/explorer-core.js`：右键菜单、属性（多选=摘要+总大小）、导航历史（navTo/navBack/navUp 统一正斜杠）、备注名显示工具（nameHtml/displayName/aliasMode）、currentCtx（优先选中项）、**框选自动滚动**
+- `src/webui/static/explorer-tree.js`：文件树 + 宽度拖拽（localStorage）+ 缩进封顶 + Known Folders 渲染 + **展开状态记忆**（操作后恢复）
+- `src/webui/static/pagination.js`：**通用导航+分页套件**（pgRegister/pgRenderBanner/pgRenderBottom/pgRemove，平铺/浏览/标签筛选/异常区共用）
 - `src/webui/static/review.js`：**待审核/标签异常统一任务视图**（缩略图卡片 + 接受/拒绝 + 异常修改/移除标签）
 - `src/webui/static/explorer-keys.js`：快捷键（含 Q 切显示模式、R 设置备注名）
 - `src/webui/static/settings.js`：设置弹窗 + 帮助/更新日志浮窗 + 备注名底色调色板 + 清理无效挂载
@@ -91,6 +96,22 @@ pystray（托盘）+ psutil + Pillow + av（PyAV，视频缩略图解码）。�
 - **导航修复**：navTo 统一正斜杠（路径格式一致）；navBack/navForward 语义修正；navUp 兼容反斜杠路径（盘符根 C:/ 正确处理）；历史去重（目标已在历史则跳回）
 - **修复**：备注名"目标串号"（currentCtx 优先选中项而非残留 ctxItem）、设置内调色板被遮挡（z-index modal-top）、多选禁用备注名入口
 
+**v0.6.1 变更：**
+- **平铺文件夹**：右键文件夹「🔍 平铺文件夹」→ 递归显示目录下所有文件（类型过滤/分页/排序/退出）；`GET /api/folders/<path>/flatten`
+- **复制标签树**：右键文件夹「📋 复制标签树」→ 目录层级 1:1 转标签树（可选自动打标）
+- **通用导航+分页套件**：`pagination.js` 统一平铺/浏览/标签筛选/异常区分页（banner 含类型过滤，每页数量记忆）
+- **多选批量追加标签**：`POST /api/tags/append` 单事务批量 union，多选打标不再逐文件请求
+- **搜索限定当前目录**：`/api/search?dir=` 只搜当前目录（含子目录），不再每次全局搜索
+- **性能优化**：
+  - `Store.__init__` 容错（完整性检查+快照）从每次实例化改为首次一次性（此前每请求白付 37MB 快照写盘）
+  - `list_dir`/`flatten_dir` 改 `os.scandir` 一次拿类型（免二次 stat）
+  - 图片缩略图走 PIL 降采样（`get_image_thumb`），网格不再直传原图
+  - 视频/文档缩略图未命中缓存异步排队，不阻塞请求
+  - 标签树计数增量更新（不整树重建）、文件树展开状态记忆
+  - 框选自动滚动 + rAF 节流
+  - Flask `threaded=True`；VACUUM 收缩数据库（36MB→0.1MB）
+- **清理**：删除死 endpoint `/api/v1/tags/pending/clear`、`/api/tags/orphans/clear`；`requirements.txt` 补 `packaging`
+
 **v0.5.2/v0.5.3 延续：**
 - 多选追加标签、清除标签、标签迁移开关、属性层级/多选摘要、筛选链优化、筛选胶囊、快捷键、演示标签、卸载体验、数据迁移机制、AppId 固定
 - **测试**：55 个用例全绿
@@ -107,8 +128,9 @@ python build_package.py   # 一键：PyInstaller onedir + Inno Setup 安装包
 
 - spec 用 `collect_submodules('pystray')` 确保托盘模块收集；`hiddenimports` 含 `av`（PyAV，其 hook 自动收集 DLL）
 - 版本号唯一来源：`src/common.py APP_VERSION`（build_package.py / health / 更新检查共用）
-- 前端 JS/CSS 改动后记得更新 `images.html` 里的 `?v=N` / `base.html` 的 style.css 版本号（防浏览器缓存）
+- **前端 JS/CSS 改动后必须更新 `images.html` 里的 `?v=N` / `base.html` 的 style.css 版本号**（防浏览器缓存）；发布前逐个核对本次改过的静态文件版本号 +1
 - 新功能需同步：更新日志浮窗（changelog-float）；帮助文档仅同步用户可感知的功能（如备注名/快捷键），"润物细无声"类（视频缩略图）不进帮助
+- 发布流程详见 `AGENTS.md`「发布流程（Release）」章节
 
 ## 已知注意事项
 

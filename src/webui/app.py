@@ -98,6 +98,13 @@ def _auto_backup():
         path = os.path.join(backup_dir, f"tags_{_time.strftime('%Y%m%d_%H%M%S')}.json")
         with open(path, "w", encoding="utf-8") as f:
             _json.dump(data, f, ensure_ascii=False, indent=2)
+        # 只保留最近 20 份备份，防止无限累积
+        try:
+            backups = sorted(f for f in os.listdir(backup_dir) if f.startswith("tags_") and f.endswith(".json"))
+            for old in backups[:-20]:
+                os.remove(os.path.join(backup_dir, old))
+        except OSError:
+            pass
         log.info("标签自动备份: %s", path)
     except Exception as e:
         log.warning("标签自动备份失败: %s", e)
@@ -112,7 +119,9 @@ def main():
     import threading
 
     def _serve():
-        app.run(host="127.0.0.1", port=args.port, debug=False, use_reloader=False)
+        # threaded=True：并发处理请求，避免缩略图/慢请求串行阻塞其他 API
+        app.run(host="127.0.0.1", port=args.port, debug=False, use_reloader=False,
+                threaded=True)
 
     t = threading.Thread(target=_serve, daemon=True)
     t.start()

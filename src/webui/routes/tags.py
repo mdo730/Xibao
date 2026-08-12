@@ -121,17 +121,6 @@ def api_tags_orphans():
         store.close()
 
 
-@tags_bp.post("/api/tags/orphans/clear")
-def api_tags_orphans_clear():
-    """一键清理"无法管理"挂载。"""
-    store = Store()
-    try:
-        n = store.clear_unmanageable_links()
-        return jsonify({"ok": True, "cleared": n})
-    finally:
-        store.close()
-
-
 @tags_bp.post("/api/tags/orphans/move-uncategorized")
 def api_tags_orphans_move_uncategorized():
     """把全部异常挂载移动到各父标签下的「未分类」子标签（保留归类+变可管理）。"""
@@ -262,6 +251,22 @@ def api_folder_set_tags(folder_path):
     try:
         store.set_folder_tags(folder_path.rstrip("/"), [int(t) for t in tag_ids])
         return jsonify({"ok": True})
+    finally:
+        store.close()
+
+
+@tags_bp.post("/api/tags/append")
+def api_tags_append_batch():
+    """批量追加标签：paths 多个路径 + tag_ids，单事务 union 追加（多选追加不再逐文件请求）。"""
+    data = request.get_json(force=True) or {}
+    paths = data.get("paths") or []
+    tag_ids = [int(t) for t in (data.get("tag_ids") or [])]
+    if not paths:
+        return jsonify({"ok": False, "error": "缺少路径"}), 400
+    store = Store()
+    try:
+        res = store.append_folder_tags_batch(paths, tag_ids)
+        return jsonify({"ok": True, **res})
     finally:
         store.close()
 

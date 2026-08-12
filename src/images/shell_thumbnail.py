@@ -172,27 +172,56 @@ def _shell_thumbnail(path, size=256, flags=None, icon_fallback=True):
         factory.contents.lpVtbl.contents.Release(factory)
 
 
+_sta_lock = threading.Lock()
+_sta_thread = None
+_sta_queue = []
+_sta_cond = threading.Condition(_sta_lock)
+
+
+def _sta_worker():
+    """常驻 STA 线程：CoInitializeEx(STA) 一次，复用处理队列。"""
+    hr = _CoInitializeEx(None, COINIT_APARTMENTTHREADED)
+    try:
+        while True:
+            with _sta_cond:
+                while not _sta_queue:
+                    _sta_cond.wait()
+                item = _sta_queue.pop(0)
+                if item is None:
+                    return
+                path, size, flags, icon_fallback, box = item
+            try:
+                box["img"] = _shell_thumbnail(path, size, flags, icon_fallback)
+            except Exception as e:
+                log.warning("系统缩略图失败 %s: %s", path, e)
+                box["img"] = None
+            box["done"] = True
+            with _sta_cond:
+                _sta_cond.notify_all()
+    finally:
+        if hr == S_OK:
+            _CoUninitialize()
+
+
 def get_shell_thumbnail(path, size=256, flags=None, icon_fallback=True):
-    """STA 线程包装：在专用线程里 CoInitializeEx(STA) 后取缩略图。"""
+    """STA 线程池包装：复用常驻 STA 线程取缩略图，避免每次新建线程+COM 初始化。"""
+    global _sta_thread
     path = os.path.abspath(path)
     if not os.path.isfile(path):
         return None
-    box = {}
-
-    def worker():
-        hr = _CoInitializeEx(None, COINIT_APARTMENTTHREADED)
-        try:
-            box["img"] = _shell_thumbnail(path, size, flags, icon_fallback)
-        except Exception as e:
-            log.warning("系统缩略图失败 %s: %s", path, e)
-            box["img"] = None
-        finally:
-            if hr == S_OK:
-                _CoUninitialize()
-
-    t = threading.Thread(target=worker, daemon=True)
-    t.start()
-    t.join()
+    box = {"img": None, "done": False}
+    with _sta_lock:
+        if _sta_thread is None or not _sta_thread.is_alive():
+            _sta_thread = threading.Thread(target=_sta_worker, daemon=True)
+            _sta_thread.start()
+        _sta_queue.append((path, size, flags, icon_fallback, box))
+        _sta_cond.notify()
+    # 等待完成（COM 缩略图通常快；最坏情况等任务跑完）
+    import time as _time
+    t0 = _time.time()
+    while not box["done"] and _time.time() - t0 < 10:
+        with _sta_cond:
+            _sta_cond.wait(timeout=0.05)
     return box.get("img")
 
 

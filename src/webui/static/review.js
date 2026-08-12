@@ -192,9 +192,9 @@ function renderTaskGrid() {
     if (g.isFolder) {
       display = `<div class="cell-icon">📁</div>`;
     } else if (g.type === 'image') {
-      display = `<img class="cell-thumb" src="${relUrl(g.path)}" loading="lazy">`;
+      display = `<img class="cell-thumb" src="${thumbUrl(g.path)}" loading="lazy">`;
     } else if (g.type === 'video') {
-      display = `<img class="cell-thumb video-thumb" src="/api/thumb?path=${encodeURIComponent(g.path)}&size=256" loading="lazy">`;
+      display = `<img class="cell-thumb video-thumb" src="${thumbUrl(g.path)}" loading="lazy">`;
     } else {
       display = fileIconHtml(basename(g.path), 'cell-icon-img', 'cell-icon', iconOf('other'), g.path);
     }
@@ -288,22 +288,12 @@ function renderOrphanActionBar() {
 
 // 异常分页条
 function renderOrphanPager() {
-  const body = document.getElementById('explorer-body');
-  let top = document.getElementById('pg-top-orphan');
-  if (!top) {
-    top = document.createElement('div');
-    top.id = 'pg-top-orphan';
-    top.className = 'flatten-pager pg-sticky';
-    body.insertBefore(top, body.firstChild);
-  }
-  let bottom = document.getElementById('pg-bottom-orphan');
-  if (!bottom) {
-    bottom = document.createElement('div');
-    bottom.id = 'pg-bottom-orphan';
-    bottom.className = 'flatten-pager';
-    body.appendChild(bottom);
-  }
-  renderPager('orphan');
+  pgRenderBanner('orphan', {
+    title: '🚨 异常标签区',
+    types: [],
+    onType: 'noop',
+  });
+  pgRenderBottom('orphan');
 }
 
 function orphanPageMove(delta) {

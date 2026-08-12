@@ -30,10 +30,12 @@ def api_images():
     except ValueError:
         limit, offset = 0, 0
     try:
+        tag_store = None
         if tag_ids and not path:
             # 标签筛选：返回挂这些标签的真实路径（文件+文件夹）
             rule = request.args.get("rule") or "else"
             store = Store()
+            tag_store = store
             try:
                 ids = [int(x) for x in tag_ids if x != "-1"]
                 if not ids:
@@ -45,33 +47,73 @@ def api_images():
                             matched |= set(store.tag_folders(tid))
                         else:
                             matched &= set(store.tag_folders(tid))
-                folders, files = [], []
+                # 类型过滤（文件夹始终保留）
+                type_filter = request.args.get("type") or "all"
+                type_exts = None
+                if type_filter != "all":
+                    type_exts = {
+                        "image": {".jpg",".jpeg",".png",".webp",".gif",".bmp",".svg",".ico",".avif"},
+                        "video": {".mp4",".mkv",".avi",".mov",".wmv",".flv",".webm",".m4v",".ts"},
+                        "audio": {".mp3",".wav",".flac",".aac",".ogg",".m4a",".wma",".opus"},
+                        "document": {".pdf",".doc",".docx",".xls",".xlsx",".ppt",".pptx",".txt",".md",".rtf"},
+                        "code": {".py",".js",".ts",".html",".css",".json",".yaml",".yml",".go",".rs",".c",".cpp",".java",".sh",".bat",".ps1",".sql",".xml",".ini",".toml"},
+                        "archive": {".zip",".rar",".7z",".tar",".gz",".bz2",".xz",".iso",".cab"},
+                    }.get(type_filter)
+                # 第一遍：只 resolve + 分类 + 轻量类型过滤（不建卡片、不做文件夹预览）
+                resolved_list = []
                 for p in matched:
                     # 路径失效 → 尝试用 file_id 反查新路径（文件移动/重命名后标签跟随）
                     resolved, _via_id = store.resolve_path(p)
                     rp = resolved or p
                     if os.path.isfile(rp):
-                        files.append(_path_card(rp))
+                        if type_exts is not None:
+                            if os.path.splitext(rp)[1].lower() not in type_exts:
+                                continue
+                        resolved_list.append((rp, False))
                     elif os.path.isdir(rp):
-                        folders.append(_path_card(rp))
-                data = {"folders": folders, "files": files, "dir": "", "truncated": False}
-            finally:
-                store.close()
+                        resolved_list.append((rp, True))
+                # 排序：文件夹在前，各自按路径
+                resolved_list.sort(key=lambda x: (not x[1], x[0].lower()))
+                total = len(resolved_list)
+                lim = limit if limit > 0 else total
+                off = offset or 0
+                page = resolved_list[off:off + lim]
+                # 第二遍：只对页面内的路径建卡片（省掉分页外的 stat/listdir）
+                folders, files = [], []
+                for rp, is_dir in page:
+                    card = _path_card(rp)
+                    if is_dir:
+                        folders.append(card)
+                    else:
+                        files.append(card)
+                data = {"folders": folders, "files": files, "dir": "",
+                        "truncated": off + lim < total, "total": total}
+            except Exception:
+                tag_store.close()
+                tag_store = None
+                raise
         else:
-            data = lib.list_dir(path, limit=limit, offset=offset)
-        # 注入备注名（一次性查映射，避免逐条 N+1）
-        store = Store()
-        try:
-            aliases = store.all_aliases()
-        finally:
-            store.close()
+            data = lib.list_dir(path, limit=limit, offset=offset,
+                                type_filter=request.args.get("type") or "all")
+        # 注入备注名（一次性查映射，避免逐条 N+1）——复用标签分支已开的 Store，避免双开
+        aliases = {}
+        if tag_store is not None:
+            try:
+                aliases = tag_store.all_aliases()
+            finally:
+                tag_store.close()
+        else:
+            store2 = Store()
+            try:
+                aliases = store2.all_aliases()
+            finally:
+                store2.close()
         for it in list(data.get("folders", [])) + list(data.get("files", [])):
             p = (it.get("path") or "").replace("\\", "/").rstrip("/")
             it["alias"] = aliases.get(p)
-        data["images"] = data.get("files", [])
         return jsonify({"ok": True, "dir": data["dir"],
                         "folders": data["folders"], "files": data.get("files", []),
-                        "images": data["images"], "truncated": data.get("truncated", False),
+                        "truncated": data.get("truncated", False),
                         "total": data.get("total", 0)})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 400
@@ -126,8 +168,14 @@ def api_library_attr():
     key = request.args.get("key") or ""
     try:
         target = lib.resolve_abs(key)
+        size = 0
+        try:
+            if os.path.isfile(target):
+                size = os.path.getsize(target)
+        except OSError:
+            size = 0
         return jsonify({"ok": True, "name": os.path.basename(target) or target,
-                        "abs_path": target, "lib": "",
+                        "abs_path": target, "lib": "", "size": size,
                         "relative": os.path.dirname(target)})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 400
@@ -285,7 +333,7 @@ def serve_image(name):
 
 @files_bp.get("/api/thumb")
 def api_thumb():
-    """视频缩略图：后台生成 + 缓存，未生成时返回占位。"""
+    """文件缩略图：图片用 PIL 降采样，视频/文档走 COM+PyAV；后台生成 + 缓存。"""
     from ...images import thumbnail
     path = request.args.get("path") or ""
     try:
@@ -294,7 +342,20 @@ def api_thumb():
         size = 256
     if not path:
         return jsonify({"ok": False, "error": "缺少路径"}), 400
-    ok, thumb_path = thumbnail.get_video_thumb(path, size)
+    ext = os.path.splitext(path)[1].lower()
+    img_exts = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".svg", ".ico", ".avif"}
+    if ext in img_exts:
+        # 图片：PIL 降采样快，同步生成（首次也毫秒级）
+        ok, thumb_path = thumbnail.get_image_thumb(path, size)
+        if ok and thumb_path:
+            return send_file(thumb_path, mimetype="image/jpeg", max_age=86400)
+        try:
+            return send_file(path, max_age=86400)  # 生成失败回退原图
+        except Exception:
+            pass
+        return jsonify({"ok": False, "error": "not ready"}), 404
+    # 视频/文档：不阻塞——命中缓存直接返回，未命中排队后台生成后返回占位
+    ok, thumb_path = thumbnail.get_video_thumb(path, size, sync=False)
     if ok and thumb_path:
         return send_file(thumb_path, mimetype="image/jpeg", max_age=86400)
     if not thumbnail.is_failed(path, size):

@@ -156,11 +156,34 @@ function renderTagTree() {
     });
   } else {
     const tree = $('#tag-tree').jstree(true);
-    tree.settings.core.data = tagsToJsTree(0);
     tree.settings.core.multiple = _filterMode;
+    // 增量刷新：只更新计数文本，不整树 refresh()（保留展开/选中状态）
+    updateTagCounts(tree);
+    // set_text 会重建受影响节点 DOM，重扫颜色圆点补回
+    setTimeout(() => { styleTagColorDots(); stylePendingTags(); }, 0);
+    // 结构变化（新建/删除/改名）才走全量重建，由 loadTags 单独触发
+  }
+}
+
+// 轻量更新标签树计数：遍历所有节点，只 set_text 计数有变化的（保留展开/选中状态）
+function updateTagCounts(tree) {
+  if (!tree) return;
+  let needRebuild = false;
+  tree.get_json('#', {flat: true}).forEach(node => {
+    if (!node || !node.li_attr || !node.li_attr['data-tag-id']) return;
+    const id = node.id;
+    const tid = parseInt(node.li_attr['data-tag-id']);
+    const t = allTags.find(x => x.id === tid);
+    if (!t) { needRebuild = true; return; }
+    const label = (t.count != null && t.count > 0) ? `${t.name} (${t.count})` : t.name;
+    if (tree.get_text(id) !== label) tree.set_text(id, label);
+  });
+  // 节点增删（新建/删除标签）时回退全量重建
+  const treeIds = new Set(tree.get_ids());
+  const wantIds = new Set(allTags.map(t => 'tag_' + t.id));
+  if (needRebuild || treeIds.size !== wantIds.size) {
+    tree.settings.core.data = tagsToJsTree(0);
     tree.refresh();
-    // refresh 完成后重新上色
-    setTimeout(() => styleTagColorDots(), 0);
   }
 }
 
@@ -199,6 +222,7 @@ function selectTag(tagId) {
   // 正常模式：单标签筛选（替换）
   currentTagIds = [tagId];
   currentPath = '';
+  browseOffset = 0; browseType = 'all';
   navToTag(currentTagIds);
   refresh(); updateTagActive(); renderFilterChips();
 }
@@ -215,6 +239,7 @@ function filterTag(tagId) {
     currentTagIds = [...currentTagIds, tagId];
   }
   currentPath = '';
+  browseOffset = 0; browseType = 'all';
   navToTag(currentTagIds);
   refresh(); updateTagActive(); renderFilterChips();
 }
@@ -233,7 +258,8 @@ function isAncestorOf(a, b) {
   return false;
 }
 function clearTagFilter() {
-  currentTagIds = []; currentPath = ''; navToTag([]); refresh(); updateTagActive(); renderFilterChips();
+  currentTagIds = []; currentPath = ''; browseOffset = 0; browseType = 'all';
+  navToTag([]); refresh(); updateTagActive(); renderFilterChips();
 }
 
 // 书签按钮：切换筛选模式
@@ -335,6 +361,7 @@ function renderFilterChips() {
       _suppressSelect = false;
     }
     currentPath = '';
+    browseOffset = 0;
     refresh(); renderFilterChips();
   });
 })();
@@ -402,7 +429,7 @@ function renderTagOptionTree(containerSel, checkedIds, leafOnly, warnTagIds) {
     plugins: ['checkbox'],
     checkbox: {
       tie_selection: false,   // 勾选与选中彻底分离
-      whole_node: false,      // 只点勾选框才勾选
+      whole_node: true,       // 点整行（含文字）即可切换勾选，符合勾选习惯
       three_state: false,     // 关闭父级级联，杜绝"父级变蓝"
       keep_selected_style: true,
     },

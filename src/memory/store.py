@@ -207,20 +207,31 @@ def ensure_healthy_db(db_path):
 
 
 class Store:
+    # 容错（健康检查+快照）只在首次实例化时做一次，避免每个请求白付全库检查+快照写盘
+    _boot_lock = None
+    _booted = False
+
     def __init__(self, db_path=None):
         self.db_path = db_path or appdata_dir("data", "memory.db")
         os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
-        # 启动容错：已有库先检测完整性，损坏则尝试抢救（仅主库路径）
-        if db_path is None:
-            self.healthy, self.health_msg = ensure_healthy_db(self.db_path)
+        # 首次实例化：启动容错（检测完整性、损坏则抢救、迁移前快照）——仅主库路径、仅一次
+        if db_path is None and not Store._booted:
+            if Store._boot_lock is None:
+                import threading
+                Store._boot_lock = threading.Lock()
+            with Store._boot_lock:
+                if not Store._booted:
+                    self.healthy, self.health_msg = ensure_healthy_db(self.db_path)
+                    if os.path.exists(self.db_path):
+                        try:
+                            snapshot_db(self.db_path)
+                        except Exception as e:
+                            log.warning("数据库快照失败: %s", e)
+                    Store._booted = True
+                else:
+                    self.healthy, self.health_msg = True, ""
         else:
             self.healthy, self.health_msg = True, ""
-        # 迁移前快照（若之前健康，为迁移/使用留一致备份）
-        if db_path is None and os.path.exists(self.db_path):
-            try:
-                snapshot_db(self.db_path)
-            except Exception as e:
-                log.warning("数据库快照失败: %s", e)
         self._conn = sqlite3.connect(self.db_path)
         self._conn.row_factory = sqlite3.Row
         self._init()
@@ -854,6 +865,29 @@ class Store:
         self._record_file_id(folder_path)
         self._conn.commit()
 
+    def append_folder_tags_batch(self, folder_paths, tag_ids):
+        """批量追加：多路径共享 tag_ids，单事务内逐路径 union 追加。返回 {done, failed:[path]}。"""
+        done, failed = [], []
+        for p in folder_paths:
+            p = (p or "").replace("\\", "/").rstrip("/")
+            if not p:
+                continue
+            try:
+                existing = {r["tag_id"] for r in self._conn.execute(
+                    "SELECT tag_id FROM folder_tags WHERE folder_path=?", (p,))}
+                for tid in tag_ids:
+                    tid = int(tid)
+                    if tid not in existing:
+                        self._conn.execute(
+                            "INSERT OR IGNORE INTO folder_tags (folder_path, tag_id) VALUES (?,?)",
+                            (p, tid))
+                self._record_file_id(p)
+                done.append(p)
+            except Exception:
+                failed.append(p)
+        self._conn.commit()
+        return {"done": done, "failed": failed}
+
     # ---------- 外部标签写入审核队列（v0.6.0 第 8 步） ----------
 
     def add_pending_apply(self, folder_path, tag_name, parent_name=None, source=None):
@@ -910,12 +944,6 @@ class Store:
         self._conn.commit()
         rejected = len(rows) - accepted
         return {"ok": True, "accepted": accepted, "rejected": rejected}
-
-    def clear_reviewed(self):
-        """清空已审核（done/rejected）的队列历史。"""
-        self._conn.execute(
-            "DELETE FROM pending_tag_applies WHERE status != 'pending'")
-        self._conn.commit()
 
     def remove_tags_for_path(self, path):
         """删除某真实路径（文件或文件夹）的所有标签关联、备注名。

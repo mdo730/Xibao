@@ -86,14 +86,17 @@ def _extract_frame_av(path, size):
     return _extract_frame(path, size)
 
 
-def get_video_thumb(path, size=256):
+def get_video_thumb(path, size=256, sync=False):
     """获取缩略图，多后端：系统 COM 优先，PyAV 回退。
+    sync=True 时阻塞生成（后台池用）；sync=False 只查缓存，未命中返回 (False, None) 由调用方排队。
     命中缓存返回 (True, thumb_path)；生成失败返回 (False, None)。"""
     if not os.path.isfile(path):
         return False, None
     cached = _cache_hit(path, size)
     if cached:
         return True, cached
+    if not sync:
+        return False, None
     os.makedirs(thumb_dir(), exist_ok=True)
     data = None
     # 后端1：系统 COM 缩略图（覆盖广、与资源管理器一致）
@@ -127,6 +130,41 @@ def get_video_thumb(path, size=256):
         return True, thumb_path
     except Exception as e:
         log.warning("视频缩略图生成失败 %s: %s", path, e)
+        _write_fail(path, size)
+        return False, None
+
+
+def get_image_thumb(path, size=256):
+    """图片缩略图：PIL 直接降采样（比 COM/解码快，纯图片专用）。
+    命中缓存返回 (True, thumb_path)；失败返回 (False, None)。"""
+    if not os.path.isfile(path):
+        return False, None
+    cached = _cache_hit(path, size)
+    if cached:
+        return True, cached
+    try:
+        with Image.open(path) as im:
+            im.thumbnail((size, size), Image.LANCZOS)
+            out = io.BytesIO()
+            im.convert("RGB").save(out, format="JPEG", quality=82)
+            data = out.getvalue()
+    except Exception as e:
+        log.warning("图片缩略图失败 %s: %s", path, e)
+        _write_fail(path, size)
+        return False, None
+    try:
+        os.makedirs(thumb_dir(), exist_ok=True)
+        thumb_path = os.path.join(thumb_dir(), _cache_key(path, size))
+        tmp = thumb_path + ".tmp"
+        with open(tmp, "wb") as f:
+            f.write(data)
+        os.replace(tmp, thumb_path)
+        st = os.stat(path)
+        with open(os.path.join(thumb_dir(), _meta_key(path, size)), "w", encoding="utf-8") as f:
+            f.write(f"{st.st_mtime_ns}|{st.st_size}")
+        return True, thumb_path
+    except Exception as e:
+        log.warning("图片缩略图保存失败 %s: %s", path, e)
         _write_fail(path, size)
         return False, None
 
@@ -180,7 +218,7 @@ class _ThumbPool:
                     return
                 path, size = self._queue.pop(0)
             try:
-                get_video_thumb(path, size)
+                get_video_thumb(path, size, sync=True)
             except Exception:
                 pass
 

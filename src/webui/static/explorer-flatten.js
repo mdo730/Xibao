@@ -12,10 +12,12 @@ function ctxFlattenFolder() {
 
 function enterFlatten(path) {
   flattenMode = true;
+  // 平铺接管分页导航：先撤掉普通浏览的分页条，避免两套导航并存
+  if (typeof browseUnregister === 'function') browseUnregister();
   flattenState = {...flattenState, path, type: 'all', depth: null, offset: 0, sortKey: 'name', sortDir: 'asc', limit: pageLimit()};
   // 注册分页 scope
   pgRegister('flatten', {
-    get: () => ({total: flattenState.total, offset: flattenState.offset, limit: flattenState.limit}),
+    get: () => ({total: flattenState.total, offset: flattenState.offset, limit: flattenState.limit, type: flattenState.type}),
     prev: () => flattenPage(-1),
     next: () => flattenPage(1),
     jump: (off) => flattenGoto(off),
@@ -27,30 +29,18 @@ function enterFlatten(path) {
 
 function exitFlatten() {
   flattenMode = false;
-  const banner = document.getElementById('flatten-banner');
-  if (banner) banner.remove();
   pgRemove('flatten');
   if (typeof refresh === 'function') refresh();
 }
 
 function renderFlattenBanner() {
-  let banner = document.getElementById('flatten-banner');
-  if (!banner) {
-    banner = document.createElement('div');
-    banner.id = 'flatten-banner';
-    banner.className = 'flatten-banner';
-    const body = document.getElementById('explorer-body');
-    body.insertBefore(banner, body.firstChild);
-  }
   const name = flattenState.path.split('/').filter(Boolean).pop() || flattenState.path;
-  const typeBtns = [['all', '全部'], ['image', '图片'], ['video', '视频'], ['document', '文档']]
-    .map(([v, l]) => `<button class="mini ${flattenState.type === v ? 'active' : ''}" onclick="flattenType('${v}')">${l}</button>`).join('');
-  banner.innerHTML = `<span class="flatten-title">🔍 平铺：${name}</span>
-    <span class="flatten-type">${typeBtns}</span>
-    <span class="muted" id="flatten-count"></span>
-    <span class="flatten-actions">
-      <button class="mini" onclick="exitFlatten()">✕ 退出</button>
-    </span>`;
+  pgRenderBanner('flatten', {
+    title: '🔍 平铺：' + name,
+    types: [['all', '全部'], ['image', '图片'], ['video', '视频'], ['document', '文档']],
+    onType: 'flattenType',
+    actions: '<button class="mini" onclick="exitFlatten()">✕ 退出</button>',
+  });
 }
 
 async function loadFlatten() {
@@ -70,9 +60,8 @@ async function loadFlatten() {
   }
   flattenState.total = d.total;
   renderFlattenGrid(d.items);
-  const cnt = document.getElementById('flatten-count');
-  if (cnt) cnt.textContent = `共 ${d.total} 个文件`;
-  renderFlattenPager();
+  renderFlattenBanner();
+  pgRenderBottom('flatten');
 }
 
 function renderFlattenGrid(items) {
@@ -90,10 +79,8 @@ function renderFlattenGrid(items) {
     card.dataset.path = it.path;
     card.dataset.key = it.path;
     let display = '';
-    if (it.type === 'image') {
-      display = `<img class="cell-thumb" src="${relUrl(it.path)}" loading="lazy">`;
-    } else if (it.type === 'video') {
-      display = `<img class="cell-thumb video-thumb" src="/api/thumb?path=${encodeURIComponent(it.path)}&size=256" loading="lazy">`;
+    if (it.type === 'image' || it.type === 'video') {
+      display = `<img class="cell-thumb" src="${thumbUrl(it.path)}" loading="lazy">`;
     } else {
       display = fileIconHtml(it.name, 'cell-icon-img', 'cell-icon', iconOf(it.type), it.path);
     }
@@ -105,28 +92,6 @@ function renderFlattenGrid(items) {
     card.ondblclick = () => openFile(it.path);
     grid.appendChild(card);
   }
-}
-
-// 平铺分页：顶部(置顶)+底部 两组，用通用组件
-function renderFlattenPager() {
-  const grid = document.getElementById('item-grid');
-  const body = document.getElementById('explorer-body');
-  let top = document.getElementById('pg-top-flatten');
-  if (!top) {
-    top = document.createElement('div');
-    top.id = 'pg-top-flatten';
-    top.className = 'flatten-pager pg-sticky';
-    // 插入到 explorer-body 顶部（sticky）
-    body.insertBefore(top, body.firstChild);
-  }
-  let bottom = document.getElementById('pg-bottom-flatten');
-  if (!bottom) {
-    bottom = document.createElement('div');
-    bottom.id = 'pg-bottom-flatten';
-    bottom.className = 'flatten-pager';
-    grid.parentNode.appendChild(bottom);
-  }
-  renderPager('flatten');
 }
 
 function flattenGoto(offset) {
@@ -147,6 +112,15 @@ function flattenType(t) {
   flattenState.type = t;
   flattenState.offset = 0;
   renderFlattenBanner();
+  loadFlatten();
+}
+
+// 平铺模式下切换排序：同步 flattenState 并重载（由 setSortField/setSortDir 转发）
+function flattenSetSort() {
+  flattenState.sortKey = sortKey;
+  flattenState.sortDir = sortDir;
+  flattenState.offset = 0;
+  if (typeof renderSortMenuActive === 'function') renderSortMenuActive();
   loadFlatten();
 }
 

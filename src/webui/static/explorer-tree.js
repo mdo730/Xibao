@@ -111,7 +111,19 @@ async function handleDropOnTree(e, destPath) {
 }
 
 // ---- 文件树（惰性加载；Known Folders 按设置过滤 + 快速访问 + 分隔线 + 盘符）----
-async function loadFileTree() {
+// 展开状态记忆：重建后恢复手动展开的目录（避免操作后整树坍缩）
+function collectExpandedPaths() {
+  const out = [];
+  document.querySelectorAll('#filetree .tree-item[data-expanded="1"]').forEach(el => {
+    const p = el.dataset.path;
+    if (p) out.push(p);
+  });
+  return out;
+}
+async function loadFileTree(restoreExpanded) {
+  const prevExpanded = (restoreExpanded !== false)
+    ? collectExpandedPaths()
+    : (typeof currentPath === 'string' ? [currentPath] : []);
   const r = await fetch('/api/filetree');
   const d = await r.json();
   if (!d.ok) return;
@@ -141,6 +153,13 @@ async function loadFileTree() {
   }
   // 盘符
   for (const node of driveNodes) await renderTreeItem(node, 0);
+  // 恢复此前展开的路径（expandToPath 从盘符根逐层展开，惰性 children 按需重载）
+  const seen = new Set();
+  for (const p of prevExpanded) {
+    if (!p || seen.has(p)) continue;
+    seen.add(p);
+    try { await expandToPath(p); } catch (e) { /* 单条失败继续 */ }
+  }
 }
 
 // 快速访问条目渲染为树节点（可点击进入，右键移除）

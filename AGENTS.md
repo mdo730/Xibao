@@ -31,3 +31,37 @@
 - 每完成一步 commit 留痕，commit message 写清做了什么。
 - 新功能/重构完成后更新接力文档（`DEVELOPMENT.md` / `ROADMAP.md`）。
 - 所有改动跑通 `pytest`（`tests/` 全量）再提交。
+
+## 发布流程（Release）
+
+发版前按以下顺序执行，全部通过才可发布。
+
+### 1. 前置检查
+- [ ] `pytest tests -q` 全量通过
+- [ ] 手工过一遍核心功能：文件浏览/搜索/打标/标签筛选/平铺/多选属性/预览/设置
+- [ ] 确认版本号：唯一来源 `src/common.py` 的 `APP_VERSION`（health/更新检查/打包共用）
+
+### 2. 更新版本号
+- 编辑 `src/common.py` 的 `APP_VERSION`（如 `0.6.1` → `0.7.0`）
+- 同步更新 `DEVELOPMENT.md` / `ROADMAP.md` 的版本记录
+
+### 3. 打包
+- 运行 `python build_package.py`（在项目根目录）
+  - 自动执行：PyInstaller（`build/Xibao.spec`，入口 `launcher.py`）→ 生成 `dist/Xibao/` → Inno Setup 生成安装包
+  - 产物：`dist/Xibao_Setup_<APP_VERSION>.exe`
+- 前提：PyInstaller 已装（脚本会自动装）；Inno Setup 编译器 `ISCC.exe` 存在（环境变量 `ISCC` 或 `inno/ISCC.exe`）
+- 注意：`build_exe.bat` 是简化版（仅 exe，无安装包），正式发布用 `build_package.py`
+
+### 4. 冒烟验证（打包产物）
+- [ ] 安装包能正常安装/卸载（Inno 脚本带运行检测 + 数据删除询问）
+- [ ] 启动后托盘图标正常、默认端口 8788
+- [ ] 打包版数据仍存 `%APPDATA%\Xibao\`（不依赖程序位置）
+- [ ] 版本号在设置「检查更新」中显示正确
+
+### 5. 发布
+- GitHub Releases 上传 `Xibao_Setup_<APP_VERSION>.exe`
+- 更新日志记录本次版本变更（对应 `DEVELOPMENT.md` 变更记录）
+
+### 开发期快速启动（非发布）
+- 源码跑：`run_hidden.bat`（后台，日志到 `work/webui.log`）或 `start.bat`（前台）
+- 命令：`.venv\Scripts\python.exe -X utf8 -m src.webui.app [--port 8899]`
