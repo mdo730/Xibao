@@ -9,6 +9,7 @@ function openSettingsModal() {
   updateAliasColorPreview();
   renderKnownFoldersSettingUI();
   loadExternalSecurity();
+  loadPageLimitSetting();
 }
 function closeSettingsModal() {
   modalHide(document.getElementById('settings-modal'));
@@ -67,6 +68,33 @@ function renderChipsSettingUI() {
     const el = document.getElementById(id);
     if (el) el.classList.toggle('active', size === val);
   });
+}
+
+// ---- 每页文件数（全局分页 limit，超1000弹警告） ----
+function loadPageLimitSetting() {
+  const el = document.getElementById('set-page-limit');
+  if (!el) return;
+  el.value = pageLimit();
+}
+async function savePageLimitSetting() {
+  const el = document.getElementById('set-page-limit');
+  const status = document.getElementById('set-page-status');
+  const v = parseInt(el.value, 10);
+  if (isNaN(v) || v < 20 || v > 2000) {
+    if (status) { status.textContent = '❌ 请输入 20-2000 之间的数值'; status.className = 'search-feedback fail'; }
+    return;
+  }
+  if (v > 1000) {
+    if (!confirm(`设为每页 ${v} 个文件会显著增加内存占用，可能导致卡顿。\n\n确定继续吗？`)) {
+      el.value = pageLimit();
+      return;
+    }
+  }
+  setPageLimit(v);
+  if (status) { status.textContent = '✅ 已保存（每页 ' + v + ' 个）'; status.className = 'search-feedback ok'; }
+  // 若当前有分页模式，刷新应用
+  if (typeof taskViewMode !== 'undefined' && taskViewMode === 'orphan' && typeof refreshReviewView === 'function') refreshReviewView();
+  if (typeof flattenMode !== 'undefined' && flattenMode && typeof loadFlatten === 'function') loadFlatten();
 }
 
 // ---- 文件树：系统文件夹开关 + 保留项（localStorage） ----

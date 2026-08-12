@@ -277,6 +277,17 @@
           <button onclick="setChipsSize('lg')" class="mini" id="btn-chips-size-lg">大</button>
         </div>
       </div>
+
+      <div class="settings-block">
+        <h4>📄 分页</h4>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:6px">
+          <span class="muted">每页文件数：</span>
+          <input type="number" id="set-page-limit" style="width:80px" min="20" max="2000">
+          <button class="mini" onclick="savePageLimitSetting()">保存</button>
+          <span id="set-page-status" class="search-feedback"></span>
+        </label>
+        <p class="muted" style="margin-top:6px">目录或筛选结果超过该数量时自动进入分页。默认 300。超过 1000 会明显增加内存占用，请谨慎。</p>
+      </div>
       </div>
 
       <div class="settings-col">
