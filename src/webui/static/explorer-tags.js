@@ -2,7 +2,8 @@
 let tagModalMode = 'set';  // 'set'=覆盖编辑（单选），'add'=追加（多选）
 let tagModalWarn = null;   // 异常标签 id 集合（编辑弹窗内加 ⚠️ 警示）
 async function openTagModal(paths, kind, mode, warnTagIds) {
-  tagModalPaths = (Array.isArray(paths) ? paths : [paths]).map(p => p.replace(/\/+$/, ''));
+  if (!paths || (Array.isArray(paths) && !paths.length)) return;
+  tagModalPaths = (Array.isArray(paths) ? paths : [paths]).map(p => (p || '').replace(/\/+$/, '')).filter(Boolean);
   tagModalMode = mode || 'set';
   tagModalWarn = warnTagIds || null;
   const isMulti = tagModalPaths.length > 1;
