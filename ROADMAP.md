@@ -1,7 +1,7 @@
 # 西煲 版本前瞻
 
 > 本文件记录已定案但尚未实现的未来版本规划（供设计与决策溯源）。
-> 当前：v0.6.0 开发中（重构基本完成，第 10 步英文界面暂缓）；已发布版本见 GitHub Releases。
+> 当前：v0.6.1 已发布；已发布版本见 GitHub Releases。
 > 注：本文件（及 README/DEVELOPMENT.md）在 v0.6.0 英文界面适配时同步做中英双语。
 
 ## 未来计划
@@ -48,12 +48,42 @@
 - **虚拟导航落地**：文件树顶部已知文件夹（桌面/下载/图片/视频等）已随第 6 步接入；未来可扩展"快速访问/最近访问"等虚拟节点
 - **预览窗格**：可选，持续对比场景（优先级低）
 
-## v0.6.1（进行中）
+## v0.6.1（已发布）
 
 - ✅ **复制标签树**（已完成）：右键文件夹「📋 复制标签树」→ 弹窗选挂载点 → 目录层级 1:1 转标签树（可选自动打标）。后端 `store.import_folder_to_tags`（os.walk 递归 + 批量建标签防 N+1 + 非法字符规范化 + 幂等），`POST /api/tags/from-folder`；前端右键菜单 + 挂载点 jsTree 弹窗。5 新测试
 - ✅ **平铺文件夹（Flatten）**（已完成）：右键文件夹「🔍 平铺文件夹」→ 递归显示所有文件。后端 `library.flatten_dir`（junction 去重 + 类型过滤 + 深度 + 分页），`GET /api/folders/<path>/flatten`；前端 explorer-flatten.js 独立平铺模式（banner 类型过滤/分页/退出）。1 新测试
-- ⬜ 待办：应用到所有子文件（设计已定案）、完整回归 + 打包发布
-- ⬜ **全部移动到未分类**（v0.6.1，设计已定案，2026-08）：异常区新增按钮（区别于全选本页），对**所有异常**（跨页全量）批量处理——①移除文件上的异常父标签 X；②在 X 下建/复用子标签「未分类」（每个 X 各自建，不同父级下同名不冲突，`get_or_create_tag` 幂等）；③文件挂到「未分类」。结果：文件保留归类（点 X 筛选父级含子级仍能找到）且变可管理（未分类是叶子）。异常文件一般只挂单个异常标签，逐个处理即可。实现：store 批量方法 + `/api/tags/orphans/move-uncategorized` + 前端异常区按钮
+- ✅ **全部移动到未分类**（已完成）：异常区按钮（区别于全选本页），对**所有异常**（跨页全量）批量处理——①移除文件上的异常父标签 X；②在 X 下建/复用子标签「未分类」（每个 X 各自建，不同父级下同名不冲突，`get_or_create_tag` 幂等）；③文件挂到「未分类」。`store.move_orphans_to_uncategorized` + `/api/tags/orphans/move-uncategorized` + 前端异常区按钮
+- ✅ **通用导航+分页套件**（已完成）：`pagination.js`——平铺/普通浏览/标签筛选/异常区四场景统一（顶部 banner 含标题+类型过滤+分页控件，底部同步分页条，每页数量 localStorage 记忆，`pgRegister/pgRenderBanner/pgRenderBottom/pgRemove`）
+- ✅ **多选批量追加标签**（已完成）：`POST /api/tags/append` 单事务批量 union 追加（`store.append_folder_tags_batch`），多选打标不再逐文件 GET+POST（此前 N 个文件 = 2N 次请求）
+- ✅ **搜索限定当前目录**（已完成）：`/api/search?dir=` 只搜当前目录（含子目录），Everything 结果按目录前缀过滤 + 本地索引 SQL 路径约束；不再每次全局搜索
+- ✅ **框选自动滚动**（已完成）：拖动框选到容器上下边缘 32px 内自动滚动（速度随深度递增），坐标统一内容坐标（client + scrollTop），mouseup 停止
+- ✅ **多选属性精简**（已完成）：仅显示 选中条目数+总大小 / 共同标签 / 全部标签，去掉逐项文件名列表；`/api/library/attr` 补 size 字段
+- ⬜ 待办：应用到所有子文件（设计已定案，未实现）
+
+### v0.6.1 性能优化（已完成，2026-08）
+
+- **Store 容错改首次一次性**：`ensure_healthy_db` + `snapshot_db` 从每次 `Store()` 构造改为模块级标志+锁首次执行一次——此前 38 处 API 每请求都白付全库检查 + 37MB 快照写盘
+- **VACUUM 收缩数据库**：36.1MB → 0.1MB（99.8% 空闲页释放），快照体积随之缩小
+- **list_dir/flatten_dir 改 scandir**：一次拿类型免二次 stat，实测 5000 文件目录首屏 15ms
+- **图片 PIL 缩略图**：`get_image_thumb` 降采样（4000×3000 → 256px 1.4KB），网格/平铺/待审核不再直传原图
+- **视频缩略图异步**：`get_video_thumb(sync=False)` 未命中缓存立即返回占位 + 后台池生成，不阻塞请求
+- **COM 常驻 STA 线程池**：`shell_thumbnail` 复用常驻线程，避免每次新建线程 + COM 初始化
+- **标签树计数增量更新**：`updateTagCounts` 只 set_text 计数变化节点，不整树 refresh()，保留展开/选中状态
+- **文件树展开状态记忆**：`loadFileTree` 重建后恢复此前展开路径
+- **marquee rAF 节流**：框选合并到 rAF 帧 + 批量写 class
+- **Flask threaded=True**：慢请求不串行阻塞其他 API
+- **单请求双 Store 合并**：标签筛选复用同一连接查别名
+- **备份保留 20 份**：不再无限累积
+- **启动去重**：首次渲染等图标表就绪后一次 fetch+render
+- **索引构建去重锁**：`_start_index_build` 检查 running，避免并发重复整盘扫描
+- **content-visibility**：网格 cell 加 `content-visibility:auto`，浏览器跳过屏外渲染（虚拟滚动的零侵入降级）
+
+### v0.6.1 清理
+
+- 删除死 endpoint：`/api/v1/tags/pending/clear`（+`Store.clear_reviewed`）、`/api/tags/orphans/clear`
+- `files.py` 移除冗余 `data["images"]` 键
+- `requirements.txt` 补 `packaging`（settings.py 更新检查实际使用）
+- 发布流程写入 `AGENTS.md`（精简）+ `docs/RELEASE.md`（细则）
 
 ### 新功能候选（需求来源：素材整理场景）
 
