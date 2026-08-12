@@ -32,7 +32,7 @@
 ## 项目背景速览
 
 - Windows 本地文件管理器（Flask + 原生 JS + jsTree + jQuery + SortableJS），Python 3.13，SQLite。
-- 当前版本 v0.6.1（已发布）。
+- 当前版本 v0.6.2。
 - 技术栈、关键代码位置、打包流程 → `DEVELOPMENT.md`；版本规划、决策记录 → `ROADMAP.md`；职责索引 → `docs/ARCHITECTURE.md`。
 
 ## 安全约定（高权限执行者必须遵守）

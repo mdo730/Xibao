@@ -5,7 +5,7 @@
 
 ## 当前状态
 
-- **当前版本：v0.6.1**
+- **当前版本：v0.6.2**
 - 项目根目录：仓库根（下文以 `<root>` 表示）
 - 虚拟环境：`<root>\.venv\Scripts\python.exe`
 - 源码运行：`start.bat` 或 `.venv\Scripts\python.exe -m src.webui.app --port 8788`
@@ -97,6 +97,17 @@ pystray（托盘）+ psutil + Pillow + av（PyAV，视频缩略图解码）。�
 - **文件树优化**：宽度可拖拽（localStorage 记忆，140-500px）+ 缩进封顶（超 8 层不再右移）
 - **导航修复**：navTo 统一正斜杠（路径格式一致）；navBack/navForward 语义修正；navUp 兼容反斜杠路径（盘符根 C:/ 正确处理）；历史去重（目标已在历史则跳回）
 - **修复**：备注名"目标串号"（currentCtx 优先选中项而非残留 ctxItem）、设置内调色板被遮挡（z-index modal-top）、多选禁用备注名入口
+
+**v0.6.2 变更（前端重构）：**
+- **前端模块化拆分**：`explorer-core.js` 1123 → 480 行，拆出 4 个独立文件：
+  - `explorer-marquee.js`（框选+自动滚动）
+  - `explorer-contextmenu.js`（右键菜单 + ctxXxx 系列）
+  - `explorer-view.js`（视图/排序/gridSize）
+  - `explorer-files-actions.js`（打开文件/属性/删除/备注名浮窗）
+- 标签管理函数从 `explorer-tree.js` 归位到 `explorer-tags-jstree.js`（loadTags/openTagColor/tagDelete/apiAddTag/PALETTE/selColor）
+- 消除 PALETTE 隐式依赖：`explorer-schemes.js` 加 typeof 兜底
+- 加载顺序调整：tags-jstree 提前到 explorer-ui 前（加载期 loadTags 就绪）；新文件紧跟 core 后
+- 纯内部重构，功能/UI 不变；130 测试全过（含 12 前端 UI）
 
 **v0.6.1 变更：**
 - **平铺文件夹**：右键文件夹「🔍 平铺文件夹」→ 递归显示目录下所有文件（类型过滤/分页/排序/退出）；`GET /api/folders/<path>/flatten`
