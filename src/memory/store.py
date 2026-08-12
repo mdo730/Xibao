@@ -246,6 +246,8 @@ class Store:
             color TEXT,
             sort_order INTEGER,
             created_at TEXT DEFAULT (datetime('now','localtime')))""")
+        # 标签树按父级递归查询频繁（tag_counts CTE/层级展开），parent_id 必须索引，否则 O(N²) 全表扫
+        c.execute("CREATE INDEX IF NOT EXISTS idx_image_tags_parent ON image_tags(parent_id)")
         c.execute("""CREATE TABLE IF NOT EXISTS folder_tags (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             folder_path TEXT NOT NULL,

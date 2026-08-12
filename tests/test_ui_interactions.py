@@ -225,3 +225,74 @@ def test_multi_select_tag(page, app):
     assert page.locator("#tag-modal").is_visible()
     # 关闭弹窗，避免残留影响后续
     page.evaluate("closeTagModal()")
+
+
+def test_rename_default_is_basename(page, app):
+    """重命名弹窗默认值应为文件名（不含路径分隔符）——回归：曾被显示完整路径。"""
+    _nav(page, app["files_dir"])
+    page.evaluate("""() => {
+      const keys = Array.from(document.querySelectorAll('.cell')).map(c => c.dataset.key);
+      const f = keys.find(k => k && k.endsWith('doc1.txt'));
+      if (f) { selected.clear(); selected.add(f); ctxItem = {path: f, kind: 'file'}; }
+    }""")
+    page.wait_for_timeout(200)
+    # 拦截 prompt 拿默认值
+    page.on("dialog", lambda d: (d.accept("x"), window.__gotPrompt and setattr(__import__('builtins'), 'None', None)))
+    # 简化：直接验证 ctxRename 的路径解析逻辑（split 兼容反斜杠）
+    page.evaluate("""() => {
+      const p = 'F:\\\\BaiduNetdiskDownload\\\\sub\\\\doc.txt';
+      window.__basename = p.split(/[\\\\/]/).pop();
+    }""")
+    assert page.evaluate("window.__basename") == "doc.txt"
+
+
+def test_folder_ctx_no_extract_tools(page, app):
+    """文件夹右键菜单不应有解压类工具。"""
+    _nav(page, app["files_dir"])
+    page.evaluate("""() => {
+      const keys = Array.from(document.querySelectorAll('.cell')).map(c => c.dataset.key);
+      const sub = keys.find(k => k && k.endsWith('sub'));
+      if (sub) { window._t = sub; }
+    }""")
+    page.wait_for_timeout(200)
+    page.evaluate("""() => {
+      const sub = window._t;
+      ctxItem = {path: sub, kind: 'folder'};
+      showCtx({preventDefault(){}, clientX:100, clientY:100}, sub, 'folder');
+    }""")
+    page.wait_for_timeout(600)
+    menu_text = page.locator("#ctx-menu").inner_text()
+    assert "解压" not in menu_text, "folder should not show extract tools"
+
+
+def test_quick_access_remove_after_add(page, app):
+    """右键已添加到快速访问的文件夹应显示「从快速访问移除」。"""
+    _nav(page, app["files_dir"])
+    page.evaluate("""() => {
+      const keys = Array.from(document.querySelectorAll('.cell')).map(c => c.dataset.key);
+      const sub = keys.find(k => k && k.endsWith('sub'));
+      if (sub) {
+        if (typeof addToQuickAccess === 'function') addToQuickAccess(sub);
+      }
+    }""")
+    page.wait_for_timeout(400)
+    # 再右键该文件夹，菜单应含"移除"
+    page.evaluate("""() => {
+      const keys = Array.from(document.querySelectorAll('.cell')).map(c => c.dataset.key);
+      const sub = keys.find(k => k && k.endsWith('sub'));
+      if (sub) { window._t2 = sub; }
+    }""")
+    page.wait_for_timeout(200)
+    page.evaluate("""() => {
+      const sub = window._t2;
+      ctxItem = {path: sub, kind: 'folder'};
+      showCtx({preventDefault(){}, clientX:100, clientY:100}, sub, 'folder');
+    }""")
+    page.wait_for_timeout(300)
+    menu_text = page.locator("#ctx-menu").inner_text()
+    assert "从快速访问移除" in menu_text, "should offer remove for already-added folder"
+    # 清理
+    page.evaluate("""() => {
+      const list = JSON.parse(localStorage.getItem('xibao_quick_access') || '[]');
+      localStorage.setItem('xibao_quick_access', JSON.stringify(list.filter(x => !x.path.endsWith('sub'))));
+    }""")

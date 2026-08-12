@@ -84,6 +84,10 @@ function updateMarquee() {
   if (_marqueeRAF) return; // 已排队的 rAF 帧，合并本次更新
   _marqueeRAF = requestAnimationFrame(() => {
     _marqueeRAF = null;
+    if (!_marquee) { // mouseup 已结束但 rAF 帧才执行：隐藏框避免残留
+      _marqueeEl.style.display = 'none';
+      return;
+    }
     const bodyEl = document.getElementById('explorer-body');
     const st = bodyEl ? bodyEl.scrollTop : 0;
     _marqueeEl.style.display = 'block';

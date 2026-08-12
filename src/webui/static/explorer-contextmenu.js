@@ -16,7 +16,14 @@ function showCtx(e, path, kind, type) {
   const isMulti = selected.size > 1;
   let html = isMulti ? '<div onclick="ctxTag()">追加标签… <span class="ctx-key">E</span></div>' : '<div onclick="ctxTag()">编辑标签… <span class="ctx-key">E</span></div>';
   html += '<div onclick="ctxClearTags()">清除标签</div>';
-  if (kind === 'folder') html += '<div onclick="ctxAddQuick()">⭐ 添加到快速访问</div>';
+  if (kind === 'folder') {
+    // 已在快速访问 → 显示移除，否则添加
+    const inQuick = (typeof loadQuickAccess === 'function') &&
+      loadQuickAccess().some(x => x.path === path.replace(/\/+$/, ''));
+    html += inQuick
+      ? '<div onclick="ctxRemoveQuick()">⭐ 从快速访问移除</div>'
+      : '<div onclick="ctxAddQuick()">⭐ 添加到快速访问</div>';
+  }
   if (kind === 'folder') html += '<div onclick="ctxCopyTagTree()">📋 复制标签树</div>';
   if (kind === 'folder') html += '<div onclick="ctxFlattenFolder()">🔍 平铺文件夹</div>';
   if (kind === 'file') html += '<div onclick="ctxOpen()">打开</div>';
@@ -31,7 +38,7 @@ function showCtx(e, path, kind, type) {
   menu.classList.remove('hidden');
   positionCtxMenu(menu, e.clientX, e.clientY);
   // 异步加载外部工具动作（仅单选/目标为文件或文件夹时）
-  if (selected.size <= 1) loadCtxTools(path);
+  if (selected.size <= 1) loadCtxTools(path, kind);
 }
 // 右键菜单定位：避免超出视口（尤其靠近底部/右侧时上移/左移）
 function positionCtxMenu(menu, x, y) {
@@ -53,14 +60,16 @@ function positionCtxMenu(menu, x, y) {
   menu.style.top = top + 'px';
   menu.style.visibility = prevVis || 'visible';
 }
-// 加载外部工具动作到右键菜单
-async function loadCtxTools(path) {
+// 加载外部工具动作到右键菜单（kind: file/folder——文件夹不显示解压类工具）
+async function loadCtxTools(path, kind) {
   const menu = document.getElementById('ctx-menu');
   const loading = menu.querySelector('.ctx-tools-loading');
   try {
     const r = await fetch('/api/tools');
     const d = await r.json();
-    const tools = (d.tools || []).filter(t => t.key !== 'everything-search-here');
+    let tools = (d.tools || []).filter(t => t.key !== 'everything-search-here');
+    // 文件夹不能"解压"：过滤掉解压类动作
+    if (kind === 'folder') tools = tools.filter(t => t.key.indexOf('extract') === -1);
     if (loading) loading.remove();
     if (!tools.length) {
       // 无工具：移除分隔线，菜单干净
@@ -240,10 +249,20 @@ function ctxAddQuick() {
   if (!ctxItem || ctxItem.kind !== 'folder') return;
   if (typeof addToQuickAccess === 'function') addToQuickAccess(ctxItem.path);
 }
+function ctxRemoveQuick() {
+  hideContextMenus();
+  if (!ctxItem || ctxItem.kind !== 'folder') return;
+  if (typeof quickRemove === 'function') {
+    // quickRemove 读 quickCtxItem，先设好
+    if (typeof quickCtxItem !== 'undefined') window.quickCtxItem = {path: ctxItem.path};
+    quickRemove();
+  }
+}
 async function ctxRename() {
   hideContextMenus();
   if (!ctxItem) return;
-  const name = prompt('新名称：', ctxItem.path.split('/').pop());
+  // Windows 路径可能用反斜杠，split 同时兼容 / 和 \
+  const name = prompt('新名称：', ctxItem.path.split(/[\\/]/).pop());
   if (!name || !name.trim()) return;
   const r = await fetch('/api/file/rename', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({key: ctxItem.path, new_name: name.trim()})});
   const d = await r.json();

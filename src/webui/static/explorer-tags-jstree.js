@@ -71,7 +71,8 @@ function renderTagTree() {
       }
     }).on('rename_node.jstree', function (e, data) {
       const tid = parseInt(data.node.li_attr['data-tag-id']);
-      const newName = (data.text || '').trim();
+      // 编辑框预填的是带计数的文本（如"壁纸 (3)"），提交时剥离计数后缀避免写进真名
+      let newName = (data.text || '').trim().replace(/\s*\(\d+\)\s*$/, '');
       if (tid && newName) apiRenameTag(tid, newName);
     }).on('move_node.jstree', function (e, data) {
       // 拖动标签调整位置/父级 → 持久化到后端
@@ -169,17 +170,20 @@ function renderTagTree() {
 function updateTagCounts(tree) {
   if (!tree) return;
   let needRebuild = false;
+  // 预建 tag_id -> tag 映射，避免 O(N²) 的 allTags.find
+  const tagById = new Map(allTags.map(t => [t.id, t]));
   tree.get_json('#', {flat: true}).forEach(node => {
     if (!node || !node.li_attr || !node.li_attr['data-tag-id']) return;
     const id = node.id;
     const tid = parseInt(node.li_attr['data-tag-id']);
-    const t = allTags.find(x => x.id === tid);
+    const t = tagById.get(tid);
     if (!t) { needRebuild = true; return; }
     const label = (t.count != null && t.count > 0) ? `${t.name} (${t.count})` : t.name;
     if (tree.get_text(id) !== label) tree.set_text(id, label);
   });
   // 节点增删（新建/删除标签）时回退全量重建
-  const treeIds = new Set(tree.get_ids());
+  // 注：jsTree 3.x 无 get_ids()，用 get_json 提取（v0.6.2 修复，此前 TypeError 导致重建失效）
+  const treeIds = new Set(tree.get_json('#', {flat: true}).map(n => n.id));
   const wantIds = new Set(allTags.map(t => 'tag_' + t.id));
   if (needRebuild || treeIds.size !== wantIds.size) {
     tree.settings.core.data = tagsToJsTree(0);
@@ -485,8 +489,10 @@ function tagRename() {
   const node = tree.get_node('tag_' + tagCtxItem.id);
   if (!node) return;
   tree.edit(node, null, function (node2, status) {
-    const name = (node2.text || '').trim();
-    if (status && name && name !== tagName(tagCtxItem.id)) apiRenameTag(tagCtxItem.id, name);
+    // 提交动作由 rename_node.jstree 事件统一处理（apiRenameTag），此处只负责取消时恢复
+    if (!status) {
+      // 编辑取消：无操作
+    }
   });
 }
 
