@@ -70,7 +70,8 @@ src/
 
 | 文件 | 一句话职责 |
 |---|---|
-| `explorer-core.js` | 主界面逻辑（浏览/选中/右键/属性/导航/框选）1123 行 |
+| `explorer-core.js` | 主界面逻辑（浏览/选中/右键/属性/导航）1008 行 |
+| `explorer-marquee.js` | 框选（marquee）——v0.6.1 拆分独立 |
 | `explorer-tree.js` | 文件树 + 快速访问 |
 | `explorer-tags-jstree.js` | 标签树 jsTree 交互 |
 | `explorer-tags.js` | 打标签弹窗 + 标签导入导出 |
