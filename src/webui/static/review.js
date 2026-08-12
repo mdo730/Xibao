@@ -7,7 +7,7 @@ let pendingGroups = [];
 let taskViewSeq = 0;       // 切换序号：防止异步 refresh 覆盖新视图
 // 异常模式分页（9252+ 文件不卡顿）
 let orphanPage = 0;
-const orphanLimit = 100;
+let orphanLimit = 100;
 let orphanTotal = 0;
 
 // ---------- 角标（按钮仅在有内容时显示） ----------
@@ -72,8 +72,7 @@ function exitTaskView() {
   if (banner) banner.remove();
   const bar = document.getElementById('orphan-action-bar');
   if (bar) bar.remove();
-  const pager = document.getElementById('orphan-pager');
-  if (pager) pager.remove();
+  if (typeof pgRemove === 'function') pgRemove('orphan');
   orphanPage = 0; orphanTotal = 0;
   if (typeof refresh === 'function') refresh();
 }
@@ -102,6 +101,7 @@ function _orphanToGroups(items) {
 }
 
 async function enterOrphanView(seq) {
+  orphanLimit = pageLimit();
   const r = await fetch(`/api/tags/orphans?offset=${orphanPage * orphanLimit}&limit=${orphanLimit}`);
   const d = await r.json();
   if (seq !== undefined && seq !== taskViewSeq) return;
@@ -112,6 +112,14 @@ async function enterOrphanView(seq) {
   updateOrphanOrderedKeys();
   const btn = document.getElementById('btn-tag-orphans');
   if (btn) btn.classList.add('active');
+  // 注册异常区分页 scope
+  pgRegister('orphan', {
+    get: () => ({total: orphanTotal, offset: orphanPage * orphanLimit, limit: orphanLimit}),
+    prev: () => orphanPageMove(-1),
+    next: () => orphanPageMove(1),
+    jump: (off) => orphanPageJump(off),
+    size: (lim) => { orphanLimit = lim; orphanPage = 0; refreshReviewView(); },
+  });
   renderTaskBanner();
   renderTaskGrid();
   renderOrphanPager();
@@ -280,24 +288,36 @@ function renderOrphanActionBar() {
 
 // 异常分页条
 function renderOrphanPager() {
-  let pager = document.getElementById('orphan-pager');
-  if (!pager) {
-    pager = document.createElement('div');
-    pager.id = 'orphan-pager';
-    pager.className = 'flatten-pager';
-    document.getElementById('explorer-body').appendChild(pager);
+  const body = document.getElementById('explorer-body');
+  let top = document.getElementById('pg-top-orphan');
+  if (!top) {
+    top = document.createElement('div');
+    top.id = 'pg-top-orphan';
+    top.className = 'flatten-pager pg-sticky';
+    body.insertBefore(top, body.firstChild);
   }
-  const totalPages = Math.max(1, Math.ceil(orphanTotal / orphanLimit));
-  const cur = orphanPage + 1;
-  pager.innerHTML = `<span class="muted">共 ${orphanTotal} 个异常 · 第 ${cur}/${totalPages} 页</span>
-    <button class="mini" ${cur <= 1 ? 'disabled' : ''} onclick="orphanPageMove(-1)">← 上一页</button>
-    <button class="mini" ${cur >= totalPages ? 'disabled' : ''} onclick="orphanPageMove(1)">下一页 →</button>`;
+  let bottom = document.getElementById('pg-bottom-orphan');
+  if (!bottom) {
+    bottom = document.createElement('div');
+    bottom.id = 'pg-bottom-orphan';
+    bottom.className = 'flatten-pager';
+    body.appendChild(bottom);
+  }
+  renderPager('orphan');
 }
 
 function orphanPageMove(delta) {
   const next = orphanPage + delta;
   if (next < 0 || next * orphanLimit >= orphanTotal) return;
   orphanPage = next;
+  selected.clear();
+  refreshReviewView();
+  const body = document.getElementById('explorer-body');
+  if (body) body.scrollTop = 0;
+}
+
+function orphanPageJump(offset) {
+  orphanPage = Math.floor(offset / orphanLimit);
   selected.clear();
   refreshReviewView();
   const body = document.getElementById('explorer-body');
