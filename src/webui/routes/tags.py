@@ -148,24 +148,57 @@ def api_tags_orphans_clear_path():
 
 @tags_bp.post("/api/tags/cleanup-invalid")
 def api_tags_cleanup_invalid():
-    """清理无效挂载：移除已不存在文件的标签关联与备注名。
-    仅用于文件被外部程序删除/移动后残留的脏数据。"""
+    """清理无效挂载：先尝试用 file_id 反查（文件可能只是移动了），
+    反查成功的重绑定；反查失败（文件真删了）才移除标签关联与备注名。"""
     import os
     store = Store()
     try:
         paths = store._conn.execute(
             "SELECT DISTINCT folder_path FROM folder_tags").fetchall()
         cleaned = 0
+        rebound = 0
         files = []
+        rebound_files = []
         for r in paths:
             p = r["folder_path"]
-            if not os.path.exists(p):
-                store._conn.execute("DELETE FROM folder_tags WHERE folder_path=?", (p,))
-                store._conn.execute("DELETE FROM path_aliases WHERE path=?", (p,))
-                files.append(p)
-                cleaned += 1
+            if os.path.exists(p):
+                continue
+            # 尝试 file_id 反查（文件移动/重命名）
+            new_path, via_id = store.resolve_path(p)
+            if via_id and new_path != p:
+                rebound_files.append({"old": p, "new": new_path})
+                rebound += 1
+                continue
+            # 反查失败：文件真删除，清理
+            store._conn.execute("DELETE FROM folder_tags WHERE folder_path=?", (p,))
+            store._conn.execute("DELETE FROM path_aliases WHERE path=?", (p,))
+            files.append(p)
+            cleaned += 1
         store._conn.commit()
-        return jsonify({"ok": True, "cleaned": cleaned, "files": files})
+        return jsonify({"ok": True, "cleaned": cleaned, "files": files,
+                        "rebound": rebound, "rebound_files": rebound_files})
+    finally:
+        store.close()
+
+
+@tags_bp.get("/api/tags/rebind/status")
+def api_tags_rebind_status():
+    """列出 file_index 中路径已失效的条目（文件可能被移动/重命名）。"""
+    store = Store()
+    try:
+        missing = store.missing_paths()
+        return jsonify({"ok": True, "count": len(missing), "items": missing})
+    finally:
+        store.close()
+
+
+@tags_bp.post("/api/tags/rebind")
+def api_tags_rebind():
+    """尝试用 file_id 反查解析所有失效路径（文件移动后标签跟随）。"""
+    store = Store()
+    try:
+        result = store.rebind_missing()
+        return jsonify({"ok": True, **result})
     finally:
         store.close()
 

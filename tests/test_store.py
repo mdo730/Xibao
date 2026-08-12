@@ -325,3 +325,44 @@ def test_flat_dict_cycle_safe(store):
     flat = store._flat_dict()
     assert a in flat and b in flat
     assert store._descendants(a) is not None  # 不抛异常/不死循环
+
+
+def test_resolve_path_follows_move(store, tmp_path):
+    """打标签后移动文件，resolve_path 应通过 file_id 找回新路径（Windows NTFS）。"""
+    import sys
+    if sys.platform != "win32":
+        pytest.skip("仅 Windows 测 file_id")
+    src_dir = tmp_path / "src"
+    dst_dir = tmp_path / "dst"
+    src_dir.mkdir()
+    dst_dir.mkdir()
+    f = src_dir / "note.txt"
+    f.write_text("hello")
+    src = str(f).replace("\\", "/")
+    # 打标签（记录 file_id）
+    store.set_folder_tags(src, [store.add_tag("工作")])
+    # 确认 file_id 已记录
+    row = store._conn.execute(
+        "SELECT file_id FROM file_index WHERE last_path=?", (src,)).fetchone()
+    assert row and row["file_id"], "file_id 应已记录"
+    # 移动文件
+    os.rename(str(f), str(dst_dir / "note.txt"))
+    new = str(dst_dir / "note.txt").replace("\\", "/")
+    # resolve_path：旧路径应解析到新路径
+    resolved, via_id = store.resolve_path(src)
+    assert resolved == new
+    assert via_id is True
+    # 关联表路径应已更新
+    tags = store.tags_for_folder(new)
+    assert any(t["name"] == "工作" for t in tags)
+    assert store.tags_for_folder(src) == []
+
+
+def test_resolve_path_exists_returns_same(store, tmp_path):
+    """路径存在时 resolve_path 直接返回原路径。"""
+    f = tmp_path / "exist.txt"
+    f.write_text("x")
+    p = str(f).replace("\\", "/")
+    resolved, via_id = store.resolve_path(p)
+    assert resolved == p
+    assert via_id is False

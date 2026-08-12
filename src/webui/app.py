@@ -118,6 +118,21 @@ def main():
     t.start()
 
     _auto_backup()
+    # 一次性回填 file_id（v12 稳定文件标识的历史数据）
+    try:
+        from ..memory.store import Store
+        _store = Store()
+        try:
+            _marker = _store.get_meta("file_id_backfilled")
+            if not _marker:
+                n = _store.backfill_file_ids()
+                _store.set_meta("file_id_backfilled", "1")
+                if n:
+                    log.info("已回填 %d 个文件的 file_id", n)
+        finally:
+            _store.close()
+    except Exception as e:
+        log.warning("file_id 回填失败: %s", e)
     log.info("西煲 WebUI 启动: http://127.0.0.1:%d", args.port)
 
     # 方案 B：打开系统浏览器访问 WebUI，保持后台运行

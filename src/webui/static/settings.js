@@ -185,6 +185,37 @@ async function cleanupInvalidMounts() {
   }
 }
 
+// ---- 标签重绑定（文件移动/重命名后，用 file_id 找回标签） ----
+async function rebindInvalidMounts() {
+  const s = document.getElementById('set-rebind-status');
+  if (s) { s.textContent = '⏳ 查找失效文件…'; s.className = 'search-feedback'; }
+  try {
+    // 先查失效状态
+    const st = await fetch('/api/tags/rebind/status');
+    const sd = await st.json();
+    if (!sd.ok) { if (s) { s.textContent = '❌ ' + (sd.error || '查询失败'); s.className = 'search-feedback fail'; } return; }
+    if (!sd.count) {
+      if (s) { s.textContent = '✅ 没有需要重绑定的文件'; s.className = 'search-feedback ok'; }
+      return;
+    }
+    if (!confirm(`发现 ${sd.count} 个路径失效的文件（可能是被移动/重命名）。\n\n确定尝试按文件 ID 找回它们的新位置吗？`)) return;
+    if (s) { s.textContent = '⏳ 重绑定中…'; s.className = 'search-feedback'; }
+    const r = await fetch('/api/tags/rebind', {method: 'POST'});
+    const d = await r.json();
+    if (!d.ok) {
+      if (s) { s.textContent = '❌ ' + (d.error || '重绑定失败'); s.className = 'search-feedback fail'; }
+      return;
+    }
+    let msg = d.resolved.length ? `✅ 已找回 ${d.resolved.length} 个文件（标签跟随到新位置）` : '⚠️ 未能自动找回';
+    if (d.still_missing && d.still_missing.length) msg += `，${d.still_missing.length} 个无法找回`;
+    if (s) { s.textContent = msg; s.className = 'search-feedback ok'; }
+    if (typeof loadTags === 'function') loadTags();
+    if (typeof refresh === 'function') refresh();
+  } catch (e) {
+    if (s) { s.textContent = '❌ 重绑定失败: ' + e.message; s.className = 'search-feedback fail'; }
+  }
+}
+
 // ---- 帮助浮窗（可拖动、可关闭） ----
 function openHelpFloat(center) {
   const f = document.getElementById('help-float');

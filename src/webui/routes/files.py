@@ -46,10 +46,13 @@ def api_images():
                             matched &= set(store.tag_folders(tid))
                 folders, files = [], []
                 for p in matched:
-                    if os.path.isfile(p):
-                        files.append(_path_card(p))
-                    elif os.path.isdir(p):
-                        folders.append(_path_card(p))
+                    # 路径失效 → 尝试用 file_id 反查新路径（文件移动/重命名后标签跟随）
+                    resolved, _via_id = store.resolve_path(p)
+                    rp = resolved or p
+                    if os.path.isfile(rp):
+                        files.append(_path_card(rp))
+                    elif os.path.isdir(rp):
+                        folders.append(_path_card(rp))
                 data = {"folders": folders, "files": files, "dir": "", "truncated": False}
             finally:
                 store.close()

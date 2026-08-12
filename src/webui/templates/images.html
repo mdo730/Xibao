@@ -236,8 +236,10 @@
             <button class="mini" onclick="exportTags()" title="导出：将当前所有标签、备注名及文件关联保存为一个文件，方便备份或转移到其他电脑">导出备份</button>
             <button class="mini" onclick="importTags()" title="导入：从备份文件恢复标签。选「确定」清空现有后替换，选「取消」合并保留现有标签">导入备份</button>
             <button class="mini danger" onclick="cleanupInvalidMounts()">清理无效挂载</button>
+            <button class="mini" onclick="rebindInvalidMounts()" title="文件被移动/重命名后，尝试按文件 ID 找回标签">🔄 重绑定失效</button>
             <span class="help-tip" title="移除已不存在文件/文件夹上的标签与备注名。西煲删除文件会自动清理标签，但资源管理器或外部程序删除/移动文件时西煲不知道，会导致标签树数量虚高（点进标签却找不到文件）。外接盘/网络盘拔掉时也会误报，确认后再清理。">?</span>
             <span id="set-cleanup-status" class="search-feedback"></span>
+            <span id="set-rebind-status" class="search-feedback"></span>
             <span id="set-tags-status" class="search-feedback"></span>
           </div>
         </div>

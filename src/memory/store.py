@@ -10,7 +10,7 @@ import sqlite3
 
 from ..common import appdata_dir, log
 
-SCHEMA_VERSION = 11
+SCHEMA_VERSION = 12
 
 
 # 迁移表：旧版本 -> 迁移函数。新版本加表/列等结构变更时，在这里登记迁移函数。
@@ -65,10 +65,30 @@ def _migrate_v10_to_v11(conn):
                  "ON folder_tags(folder_path, tag_id)")
 
 
+def _migrate_v11_to_v12(conn):
+    """v12：稳定文件标识——folder_tags/path_aliases 加 file_id 列 + file_index 表。
+    file_id 用于文件移动/重命名后标签跟随（ID 优先 + 路径兜底）。"""
+    for table in ("folder_tags", "path_aliases"):
+        try:
+            conn.execute(f"SELECT file_id FROM {table} LIMIT 1").fetchone()
+        except Exception:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN file_id TEXT")
+    conn.execute("""CREATE TABLE IF NOT EXISTS file_index (
+        file_id TEXT PRIMARY KEY,
+        id_trusted INTEGER NOT NULL DEFAULT 1,
+        fs_type TEXT,
+        last_path TEXT NOT NULL,
+        last_size INTEGER,
+        last_mtime REAL,
+        updated_at TEXT DEFAULT (datetime('now','localtime')))""")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_file_index_path ON file_index(last_path)")
+
+
 _MIGRATIONS = {
     8: _migrate_v8_to_v9,
     9: _migrate_v9_to_v10,
     10: _migrate_v10_to_v11,
+    11: _migrate_v11_to_v12,
 }
 
 
@@ -219,12 +239,23 @@ class Store:
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             folder_path TEXT NOT NULL,
             tag_id INTEGER NOT NULL,
+            file_id TEXT,
             created_at TEXT DEFAULT (datetime('now','localtime')))""")
         c.execute("""CREATE TABLE IF NOT EXISTS path_aliases (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             path TEXT NOT NULL UNIQUE,
             alias TEXT NOT NULL,
+            file_id TEXT,
             created_at TEXT DEFAULT (datetime('now','localtime')))""")
+        c.execute("""CREATE TABLE IF NOT EXISTS file_index (
+            file_id TEXT PRIMARY KEY,
+            id_trusted INTEGER NOT NULL DEFAULT 1,
+            fs_type TEXT,
+            last_path TEXT NOT NULL,
+            last_size INTEGER,
+            last_mtime REAL,
+            updated_at TEXT DEFAULT (datetime('now','localtime')))""")
+        c.execute("CREATE INDEX IF NOT EXISTS idx_file_index_path ON file_index(last_path)")
         c.execute("""CREATE TABLE IF NOT EXISTS pending_tag_applies (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             folder_path TEXT NOT NULL,
@@ -458,6 +489,57 @@ class Store:
             list(ids)).fetchall()
         return [r["folder_path"] for r in rows]
 
+    def _record_file_id(self, folder_path):
+        """记录路径的 file_id（写入关联表的 file_id 列 + file_index 缓存）。
+        Windows/NTFS 可信则记，否则跳过（纯路径模式）。"""
+        try:
+            from ..images import file_id as fid
+            fid_str, trusted = fid.get_file_id(folder_path)
+            if not fid_str:
+                return
+            # 更新 file_index 缓存
+            st = None
+            try:
+                import os as _os
+                st = _os.stat(folder_path)
+            except OSError:
+                pass
+            self._conn.execute(
+                "INSERT INTO file_index (file_id, id_trusted, fs_type, last_path, last_size, last_mtime) "
+                "VALUES (?,?,?,?,?,?) ON CONFLICT(file_id) DO UPDATE SET "
+                "last_path=excluded.last_path, last_size=excluded.last_size, last_mtime=excluded.last_mtime",
+                (fid_str, 1 if trusted else 0, None, folder_path,
+                 st.st_size if st else None, st.st_mtime if st else None))
+            # 更新该路径在关联表里的 file_id
+            self._conn.execute(
+                "UPDATE folder_tags SET file_id=? WHERE folder_path=?", (fid_str, folder_path))
+            self._conn.execute(
+                "UPDATE path_aliases SET file_id=? WHERE path=?", (fid_str, folder_path))
+        except Exception:
+            pass
+
+    def backfill_file_ids(self):
+        """一次性回填：为已有 folder_tags/path_aliases 里的路径补 file_id。
+        仅对存在的路径记录；返回补条数。"""
+        paths = set()
+        for r in self._conn.execute("SELECT DISTINCT folder_path FROM folder_tags"):
+            if r["folder_path"]:
+                paths.add(r["folder_path"])
+        for r in self._conn.execute("SELECT DISTINCT path FROM path_aliases"):
+            if r["path"]:
+                paths.add(r["path"])
+        n = 0
+        for p in paths:
+            before = self._conn.execute(
+                "SELECT COUNT(*) c FROM file_index WHERE last_path=?", (p,)).fetchone()["c"]
+            self._record_file_id(p)
+            after = self._conn.execute(
+                "SELECT COUNT(*) c FROM file_index WHERE last_path=?", (p,)).fetchone()["c"]
+            if after > before:
+                n += 1
+        self._conn.commit()
+        return n
+
     def set_folder_tags(self, folder_path, tag_ids):
         """把文件夹/文件的标签设为 tag_ids 集合（全量替换）。路径统一正斜杠。
         只存实际勾选的标签（叶子），不物化祖先链。"""
@@ -468,6 +550,7 @@ class Store:
             self._conn.execute(
                 "INSERT OR IGNORE INTO folder_tags (folder_path, tag_id) VALUES (?,?)",
                 (folder_path, tid))
+        self._record_file_id(folder_path)
         self._conn.commit()
 
 
@@ -519,6 +602,70 @@ class Store:
                 names.add(r["parent_name"])
         return names
 
+    def resolve_path(self, path):
+        """ID 优先 + 路径兜底：路径失效时用 file_id 反查新路径（文件移动/重命名后）。
+        返回 (解析后路径, 是否经 ID 反查)。
+        若路径存在直接返回；不存在则查 file_index 的 file_id → OpenFileById 反查。"""
+        import os as _os
+        path = (path or "").replace("\\", "/").rstrip("/")
+        if not path:
+            return path, False
+        if _os.path.exists(path):
+            return path, False
+        # 查该路径记录的 file_id
+        row = self._conn.execute(
+            "SELECT file_id FROM file_index WHERE last_path=?", (path,)).fetchone()
+        if not row or not row["file_id"]:
+            # 兜底：查关联表里的 file_id
+            row2 = self._conn.execute(
+                "SELECT file_id FROM folder_tags WHERE folder_path=? LIMIT 1",
+                (path,)).fetchone()
+            row3 = self._conn.execute(
+                "SELECT file_id FROM path_aliases WHERE path=? LIMIT 1",
+                (path,)).fetchone()
+            fid = (row2["file_id"] if row2 and row2["file_id"] else None) or \
+                  (row3["file_id"] if row3 and row3["file_id"] else None)
+        else:
+            fid = row["file_id"]
+        if not fid:
+            return path, False
+        try:
+            from ..images import file_id as fid_mod
+            new_path = fid_mod.resolve_path_by_id(fid)
+        except Exception:
+            return path, False
+        if not new_path:
+            return path, False
+        new_path = new_path.replace("\\", "/")
+        # 更新 file_index 缓存 + 关联表路径
+        self._conn.execute(
+            "UPDATE file_index SET last_path=? WHERE file_id=?", (new_path, fid))
+        self._conn.execute(
+            "UPDATE folder_tags SET folder_path=? WHERE file_id=?", (new_path, fid))
+        self._conn.execute(
+            "UPDATE path_aliases SET path=? WHERE file_id=?", (new_path, fid))
+        self._conn.commit()
+        return new_path, True
+
+    def missing_paths(self):
+        """列出 file_index 中当前路径已失效的条目。返回 [{path, file_id}]。"""
+        import os as _os
+        rows = self._conn.execute(
+            "SELECT last_path, file_id FROM file_index").fetchall()
+        return [{"path": r["last_path"], "file_id": r["file_id"]}
+                for r in rows if r["last_path"] and not _os.path.exists(r["last_path"])]
+
+    def rebind_missing(self):
+        """尝试解析所有失效路径。返回 {resolved: [{old, new}], still_missing: [path]}。"""
+        resolved, still = [], []
+        for m in self.missing_paths():
+            new_path, via_id = self.resolve_path(m["path"])
+            if via_id and new_path != m["path"]:
+                resolved.append({"old": m["path"], "new": new_path})
+            else:
+                still.append(m["path"])
+        return {"resolved": resolved, "still_missing": still}
+
     def append_folder_tags(self, folder_path, tag_ids):
         """追加模式：在现有标签基础上追加 tag_ids（只存勾选，不物化祖先）。幂等。"""
         folder_path = folder_path.replace("\\", "/").rstrip("/")
@@ -530,6 +677,7 @@ class Store:
                 self._conn.execute(
                     "INSERT OR IGNORE INTO folder_tags (folder_path, tag_id) VALUES (?,?)",
                     (folder_path, tid))
+        self._record_file_id(folder_path)
         self._conn.commit()
 
     # ---------- 外部标签写入审核队列（v0.6.0 第 8 步） ----------
@@ -670,6 +818,7 @@ class Store:
                 "INSERT INTO path_aliases (path, alias) VALUES (?,?) "
                 "ON CONFLICT(path) DO UPDATE SET alias=excluded.alias",
                 (path, alias))
+            self._record_file_id(path)
         self._conn.commit()
 
     def all_aliases(self):
