@@ -142,6 +142,8 @@ python build_package.py   # 一键：PyInstaller onedir + Inno Setup 安装包
 - 全程离线，无后台联网（Everything 用 Win32 IPC，浏览器打开走 127.0.0.1；唯一出站联网是「检查更新」，仅在用户主动点击时请求 GitHub Releases）
 - **GitHub 推送需 Clash 代理**：`git config --global http.proxy http://127.0.0.1:7897`（git push 前 Clash 要开着）
 - 测试环境：Playwright 无头浏览器可用（`.venv` 已装），可自动化验证前端
+- **Playwright Windows 弹窗补丁（必看）**：Playwright 1.62 有官方 bug（microsoft/playwright#41630）——Windows 上启动 headless 浏览器会弹控制台窗口（`chrome-headless-shell` 是 console 子系统，spawn 缺 `windowsHide: true`）。已在 `.venv/Lib/site-packages/playwright/driver/package/lib/coreBundle.js` 的 `launchProcess` 的 `spawnOptions` 加 `windowsHide: true` 修复。**升级 Playwright 后会被覆盖，需重打**（在 `detached: process.platform !== "win32"` 下一行加 `windowsHide: true`）
+- 前端 UI 测试（`tests/test_ui_core.py` / `test_ui_interactions.py`）会自启隔离服务器（`work/test_ui/`），结束后 `pytest_sessionfinish` 自动清理浏览器残留
 
 ## 数据位置与兼容
 
