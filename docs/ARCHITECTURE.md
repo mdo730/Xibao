@@ -46,8 +46,9 @@
 
 | 职责 | 位置 | 关键函数/接口 |
 |---|---|---|
+| 文件操作/属性/删除 | `explorer-files-actions.js` | `openFile`、`openAttrModal`、`openMultiAttrModal`、`doDelete`、`ctxSetAlias`（v0.6.1 拆分独立） |
 | 视图/排序 | `explorer-view.js` | `setView`、`setSortField/setSortDir`、`setGridSize`、`loadGridSize`（v0.6.1 拆分独立） |
-| 主界面逻辑（浏览/选中/属性） | `explorer-core.js` | `refresh`、`render`、`navTo`、`openAttrModal`、`updateSelectionUI`、`openMultiAttrModal` |
+| 主界面核心 | `explorer-core.js` | 全局状态声明 + `refresh`/`render`/`navTo` + 备注名工具 + 地址栏 + 渲染管线 |
 | 右键菜单 | `explorer-contextmenu.js` | `showCtx`、`ctxTag`、`ctxClearTags`、`ctxCopyTagTree`、`ctxDelete`、`hideContextMenus`（v0.6.1 拆分独立） |
 | 框选（marquee） | `explorer-marquee.js` | `updateMarquee`、`initMarquee`、自动滚动（v0.6.1 拆分独立） |
 | 分页套件（四场景共用） | `pagination.js` | `pgRegister/pgRenderBanner/pgRenderBottom/pgRemove/pgRender`、`pageLimit` |
@@ -67,7 +68,7 @@
 
 这些函数在"错误的文件"里，当前可运行但破坏模块边界。**扩展相关功能前先看这里**。
 
-1. **`explorer-core.js` 仍需继续瘦身**：676 行，属性弹窗/备注名浮窗/渲染管线仍集中，后续可再拆
+1. **`explorer-core.js` 拆分完成**（v0.6.1 重构）：1123 → 480 行，框选/右键菜单/视图排序/文件操作四块已拆为独立文件，剩余为核心状态+导航+渲染（依赖深，保留集中）
 2. **`settings.js` 隐式依赖**：`settings.js:446` 用 `typeof PALETTE !== 'undefined'` 判断（依赖 explorer-tags-jstree.js 恰好先加载且定义了 PALETTE）——`explorer-schemes.js` 已加同类 typeof 兜底
 3. **空壳代码**：`explorer-flatten.js` 尾部 DOMContentLoaded 里 `const orig = window.refresh` 从未使用，注释自称"refresh() 拦截"但无实际作用
 4. **后端混放**：`routes/settings.py` 含标签导入导出（`/api/tags/export-to`、`/api/tags/import`），属标签职责，理论上应在 tags.py

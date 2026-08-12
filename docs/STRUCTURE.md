@@ -70,7 +70,8 @@ src/
 
 | 文件 | 一句话职责 |
 |---|---|
-| `explorer-core.js` | 主界面逻辑（浏览/选中/属性/导航）676 行 |
+| `explorer-core.js` | 核心状态 + 导航 + 渲染管线（备注名工具/导航/地址栏/数据加载/渲染）480 行 |
+| `explorer-files-actions.js` | 文件操作/属性/删除（openFile/openAttrModal/doDelete）——v0.6.1 拆分独立 |
 | `explorer-view.js` | 视图/排序（setView/setSort/gridSize）——v0.6.1 拆分独立 |
 | `explorer-marquee.js` | 框选（marquee）——v0.6.1 拆分独立 |
 | `explorer-contextmenu.js` | 右键菜单（showCtx/ctxXxx 系列）——v0.6.1 拆分独立 |
