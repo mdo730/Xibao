@@ -75,6 +75,25 @@ def api_images():
         return jsonify({"ok": False, "error": str(e)}), 400
 
 
+@files_bp.get("/api/folders/<path:folder_path>/flatten")
+def api_folder_flatten(folder_path):
+    """平铺文件夹：递归列出该目录下所有文件（带过滤/深度/分页）。"""
+    from ...images import library as lib
+    try:
+        offset = max(0, int(request.args.get("offset") or 0))
+        limit = min(500, max(1, int(request.args.get("limit") or 100)))
+    except ValueError:
+        offset, limit = 0, 100
+    type_filter = request.args.get("type") or "all"
+    max_depth_s = request.args.get("depth")
+    max_depth = int(max_depth_s) if max_depth_s else None
+    sort_key = request.args.get("sort") or "name"
+    sort_dir = request.args.get("dir") or "asc"
+    res = lib.flatten_dir(folder_path, type_filter=type_filter, max_depth=max_depth,
+                          offset=offset, limit=limit, sort_key=sort_key, sort_dir=sort_dir)
+    return jsonify({"ok": True, "path": folder_path.rstrip("/"), **res})
+
+
 @files_bp.post("/api/images/delete")
 def api_images_delete():
     from ...images import library as lib

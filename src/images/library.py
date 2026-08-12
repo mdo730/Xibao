@@ -37,6 +37,85 @@ def file_type(name):
     return "other"
 
 
+def flatten_dir(root, type_filter="all", max_depth=None, offset=0, limit=100,
+                sort_key="name", sort_dir="asc"):
+    """平铺文件夹：递归列出 root 下所有文件（不含子文件夹条目）。
+
+    type_filter: all / image / video / document / code / archive / audio
+    max_depth: 最大子目录层数（None=全递归）
+    offset/limit: 分页；sort_key: name/mtime/size；sort_dir: asc/desc
+    返回 {total, items:[{name, path, rel_path, folder_rel_path, size, mtime, type, ext}]}。
+    用 (st_dev, st_ino) 去重防 junction 循环；onerror 跳过无权限目录。
+    """
+    items = []
+    seen = set()
+    _skip = {"$RECYCLE.BIN", "System Volume Information", "$Recycle.Bin",
+             ".git", ".thumbnails", "Thumbs.db"}
+    type_exts = {
+        "image": _IMG_EXTS, "video": _VIDEO_EXTS, "audio": _AUDIO_EXTS,
+        "document": _DOC_EXTS + (".pdf",), "code": _CODE_EXTS,
+        "archive": _ARCHIVE_EXTS,
+    }
+
+    def _onerror(e):
+        pass  # 权限不足跳过
+
+    for dirpath, dirnames, filenames in os.walk(root, onerror=_onerror):
+        try:
+            st = os.stat(dirpath)
+            key = (st.st_dev, st.st_ino)
+        except OSError:
+            key = None
+        if key and key in seen:
+            dirnames[:] = []
+            continue
+        if key:
+            seen.add(key)
+        rel = os.path.relpath(dirpath, root)
+        depth = 0 if rel == "." else rel.count(os.sep) + 1
+        if max_depth is not None and depth > max_depth:
+            dirnames[:] = []
+            continue
+        dirnames[:] = [d for d in dirnames if d not in _skip]
+        folder_rel = "" if rel == "." else rel.replace("\\", "/")
+        for fn in filenames:
+            if fn in _skip:
+                continue
+            full = os.path.join(dirpath, fn)
+            ft = file_type(fn)
+            if type_filter != "all":
+                ext = os.path.splitext(fn)[1].lower()
+                if ext not in type_exts.get(type_filter, ()):
+                    continue
+            try:
+                fs = os.stat(full)
+            except OSError:
+                continue
+            items.append({
+                "name": fn,
+                "path": full.replace("\\", "/"),
+                "rel_path": (folder_rel + "/" + fn) if folder_rel else fn,
+                "folder_rel_path": folder_rel,
+                "size": fs.st_size,
+                "mtime": fs.st_mtime,
+                "type": ft,
+                "ext": os.path.splitext(fn)[1].lower(),
+            })
+
+    # 排序
+    if sort_key == "mtime":
+        items.sort(key=lambda x: (x["mtime"], x["path"]), reverse=(sort_dir == "desc"))
+    elif sort_key == "size":
+        items.sort(key=lambda x: (x["size"], x["path"]), reverse=(sort_dir == "desc"))
+    else:
+        items.sort(key=lambda x: (x["name"].lower(), x["path"]), reverse=(sort_dir == "desc"))
+
+    total = len(items)
+    page = items[offset:offset + limit]
+    return {"total": total, "items": page}
+
+
+
 
 def _file_meta(path):
     try:

@@ -203,6 +203,31 @@ def api_tags_rebind():
         store.close()
 
 
+@tags_bp.post("/api/tags/from-folder")
+def api_tags_from_folder():
+    """复制标签树：把文件夹目录结构转成标签树（可选打标）。
+    请求：{path, parent_tag_id, apply_tags, max_depth}
+    """
+    import os as _os
+    data = request.get_json(force=True) or {}
+    path = (data.get("path") or "").strip()
+    parent_tag_id = int(data.get("parent_tag_id") or 0)
+    apply_tags = bool(data.get("apply_tags"))
+    max_depth = data.get("max_depth")
+    if not path or not _os.path.isdir(path):
+        return jsonify({"ok": False, "error": "路径不是有效文件夹"}), 400
+    store = Store()
+    try:
+        res = store.import_folder_to_tags(
+            path, parent_tag_id=parent_tag_id,
+            apply_tags=apply_tags,
+            max_depth=int(max_depth) if max_depth else None,
+        )
+        return jsonify({"ok": True, **res})
+    finally:
+        store.close()
+
+
 @tags_bp.get("/api/folders/<path:folder_path>/tags")
 def api_folder_tags(folder_path):
     store = Store()
