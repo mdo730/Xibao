@@ -14,7 +14,7 @@
 ## v0.6.0（重构，进行中）
 
 > 重构原则：**底层逻辑优先**——先立地基与接口，再谈功能；不先做会让后续功能难以接入的项，优先做。
-> **进度**：✅ 第 1、2、4、5、6、7、8、9 步完成（模块解耦、数据库容错、右键菜单+外部工具、缩略图后端、导航源抽象、层级展开重构、外部写入API、标签筛选返回交互）；⬜ 第 3 步暂缓（最后做）
+> **进度**：✅ 第 1、2、3、4、5、6、7、8、9 步完成（模块解耦、数据库容错、稳定文件标识、右键菜单+外部工具、缩略图后端、导航源抽象、层级展开重构、外部写入API、标签筛选返回交互）；⬜ 剩余第 10、11 步（英文界面、增量更新）
 > **⚠️ 后续提醒**：做完第 4-11 步后，**务必回头做第 3 步（稳定文件标识）和第 7 步（层级展开重构）**——这是 v0.6.0 的两个深层架构项，不要遗漏。
 > **约束**：第 3 步之前**不要改动 `folder_tags` / `path_aliases` 的表结构**（只加不改，第 3 步要 `ALTER TABLE ADD COLUMN file_id`）。
 > **已交付增强**（第 4/5/6/8 步连带）：Bandizip 探测、解压后自动刷新、右键菜单位置约束、系统文件图标（exe 按路径缓存）、文件树系统文件夹可选保留、快速访问并入文件树、标签拖动排序持久化（move_tag + sort_order + 祖先链同步）、待审核/标签异常统一缩略图视图、孤儿挂载检测与清理、设置里「清理无效挂载」
@@ -24,18 +24,7 @@
 ### 第一梯队：地基（必须最先，后续全依赖）
 1. ✅ **模块解耦**（已完成）：app.py 按域拆分 Blueprint（routes/tags, files, search, settings），API 路径不变，前端零改动，57 单测全过
 2. ✅ **数据库容错**（已完成）：`PRAGMA integrity_check` 检测 + 纯 Python 逐表 salvage 修复 + `Connection.backup()` 原子快照轮转；Store 启动自动检测损坏并恢复；66 单测全过
-3. ⏸️ **稳定文件标识**（暂缓，最后做；已调研完成，方案定案）：
-   - **结论**：`os.stat().st_ino + st_dev` = NTFS 文件 ID（Python 3.12+ 128 位，标准库零依赖），无需 pywin32/自写 ctypes
-   - **方案**："ID 优先 + 路径兜底"：打标/写备注时同时记 `file_id`；路径失效用 ID 反查
-   - **反查三层**：`file_index.last_path` 缓存（必须，轻量）→ `OpenFileById` ctypes 反查（可选，需提权/管理员，st_ino 字节序需自检）→ 手动重绑定 UI（必须，跨卷移动兜底）
-   - **分步实施**（约 3-5 天，分 commit 留痕）：
-     1. DDL：folder_tags/path_aliases 加 file_id 列 + file_index 表（file_id/last_path/fs_kind/id_trusted）+ 写入带 ID（0.5 天，纯增量可逆）
-     2. 一次性回填（后台分批，按卷跳过不可达，0.5-1 天）
-     3. `resolve_path`（ID 优先+路径兜底+重建策略开关）+ 孤儿列表/手动重绑定（1-2 天）
-     4. OpenFileById 反查 + selftest（可选，1 天，自检不过就关掉退回 last_path）
-     5. watcher 实时跨卷移动（可选，未来）
-   - **关键决策**：删除重建→file_id 变，默认不继承旧标签（安全）；跨卷移动→st_dev 变 ID 失效，需手动重绑定；FAT32/exFAT/SMB→`id_trusted=0` 纯路径模式
-   - **风险**：数据模型迁移，改错影响现有用户标签；实施前先做第 1 步 DDL 增量提交隔离风险
+3. ✅ **稳定文件标识**（已完成）：`os.stat().st_ino + st_dev` = NTFS 文件 ID（`src/images/file_id.py`：十六进制编码、OpenFileById 反查路径、按卷探测文件系统类型判信任级）；folder_tags/path_aliases 加 file_id + file_index 表（schema v12）；打标/备注记录 file_id；`resolve_path`（ID 优先+路径兜底）接入标签筛选自动找回移动文件；cleanup-invalid 改为先反查再清理；设置「🔄 重绑定失效」；启动一次性回填；105 单测
 
 ### 第二梯队：架构接口（随解耦定义，供未来功能接入）
 4. ✅ **西煲内置右键菜单 + 外部工具集成**（已完成核心）：`src/images/tools.py` 探测已装软件（7-Zip/WinRAR/Locale Emulator/Everything，纯 winreg）+ `/api/tools`（动作清单）+ `/api/tools/run`（后台执行）+ 前端右键菜单动态加载；参考 patool/ConEmu/LE 官方实现；74 单测
