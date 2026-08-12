@@ -40,6 +40,8 @@ pystray（托盘）+ psutil + Pillow + av（PyAV，视频缩略图解码）。�
 
 ## 关键代码位置
 
+> 职责索引（找"某功能在哪"）用 `docs/ARCHITECTURE.md`——按功能域组织 + 标注混放点/隐式依赖。下面按文件概览。
+
 - `launcher.py`：端口/残留/托盘/代理逻辑（顶层 import pystray/psutil/PIL）
 - `src/webui/app.py`：瘦身版——页面路由 + Blueprint 注册 + `_seed_default_tags()` + `_auto_backup()` + `_resource_path()` + 启动
 - `src/webui/routes/`：**API 按域拆分（Blueprint，v0.6.0 重构第 1 步）**
